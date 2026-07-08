@@ -1,0 +1,15 @@
+{
+    "schema_version": "4.0.0",
+    "packages": [
+        {
+            "name": "MarkdownPreviewPro",
+            "details": "https://github.com/YOUR_GITHUB_USER/MarkdownPreviewPro",
+            "releases": [
+                {
+                    "sublime_text": ">=4000",
+                    "tags": true
+                }
+            ]
+        }
+    ]
+}

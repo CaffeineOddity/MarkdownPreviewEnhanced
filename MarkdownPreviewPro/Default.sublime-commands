@@ -1,0 +1,14 @@
+[
+    {
+        "caption": "MarkdownPreviewPro: Toggle Preview",
+        "command": "markdown_preview_pro_toggle"
+    },
+    {
+        "caption": "MarkdownPreviewPro: Close Preview",
+        "command": "markdown_preview_pro_close"
+    },
+    {
+        "caption": "MarkdownPreviewPro: Refresh Preview",
+        "command": "markdown_preview_pro_refresh"
+    }
+]

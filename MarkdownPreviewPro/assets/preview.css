@@ -1,0 +1,114 @@
+/* GitHub-style markdown preview — full browser rendering. */
+
+html {
+  background-color: #ffffff;
+}
+body {
+  background-color: #ffffff;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #24292e;
+}
+.markdown-body {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 28px;
+}
+
+/* headings */
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: .3em; }
+h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: .3em; }
+h3 { font-size: 1.25em; }
+h4 { font-size: 1em; }
+
+/* paragraphs / links */
+p { margin-top: 0; margin-bottom: 16px; }
+a { color: #0969da; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* lists */
+ul, ol { padding-left: 2em; margin-bottom: 16px; }
+li { margin-bottom: 4px; }
+
+/* inline code */
+code {
+  font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 85%;
+  padding: .2em .4em;
+  background-color: rgba(175,184,193,.2);
+  border-radius: 6px;
+}
+
+/* code blocks */
+pre {
+  font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 85%;
+  padding: 16px;
+  overflow: auto;
+  background-color: #f6f8fa;
+  border-radius: 6px;
+  line-height: 1.45;
+  margin-bottom: 16px;
+}
+pre code {
+  padding: 0;
+  background-color: transparent;
+  font-size: 100%;
+}
+
+/* blockquotes */
+blockquote {
+  padding: 0 1em;
+  color: #656d76;
+  border-left: .25em solid #d0d7de;
+  margin: 0 0 16px 0;
+}
+
+/* ── tables (native <table>, full browser rendering) ───────────────────── */
+table {
+  margin: 0 0 16px 0;
+  border-collapse: collapse;
+  border-spacing: 0;
+  width: 100%;
+}
+th, td {
+  padding: 6px 13px;
+  border: 1px solid #d0d7de;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background-color: #f6f8fa;
+  font-weight: 600;
+}
+tr:nth-child(even) td {
+  background-color: #f6f8fa;
+}
+
+/* images / hr */
+img { max-width: 100%; }
+hr {
+  height: .25em;
+  padding: 0;
+  margin: 24px 0;
+  border: 0;
+  background-color: #d0d7de;
+}
+
+/* mermaid */
+.mermaid-svg { text-align: center; margin: 16px 0; }
+.mermaid-svg svg { max-width: 100%; height: auto; }
+.mermaid-error {
+  background-color: #fff5f5;
+  border: 1px solid #ffdce0;
+  border-radius: 6px;
+}

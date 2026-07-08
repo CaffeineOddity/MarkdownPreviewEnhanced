@@ -1,0 +1,26 @@
+{
+    "schema_version": "4.0.0",
+    "packages": [
+        {
+            "name": "MarkdownPreviewPro",
+            "details": "https://github.com/YOUR_GITHUB_USER/MarkdownPreviewPro",
+            "homepage": "https://github.com/YOUR_GITHUB_USER/MarkdownPreviewPro",
+            "author": "YOUR_GITHUB_USER",
+            "readme": "https://raw.githubusercontent.com/YOUR_GITHUB_USER/MarkdownPreviewPro/main/README.md",
+            "issues": "https://github.com/YOUR_GITHUB_USER/MarkdownPreviewPro/issues",
+            "labels": [
+                "markdown",
+                "preview",
+                "mermaid",
+                "live preview",
+                "syntax highlighting"
+            ],
+            "releases": [
+                {
+                    "sublime_text": ">=4000",
+                    "tags": true
+                }
+            ]
+        }
+    ]
+}

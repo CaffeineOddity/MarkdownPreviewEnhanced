@@ -1,0 +1,9 @@
+# 1.0.0
+
+Initial release of MarkdownPreviewPro.
+
+- Side-by-side live markdown preview (`super+shift+m` / `ctrl+shift+m`).
+- Mermaid diagrams rendered to SVG via mermaid-cli (npx), cached.
+- Syntax-highlighted code blocks via Pygments.
+- Tables, fenced code, TOC, attribute lists, nl2br.
+- Vendored python-markdown 3.7 + Pygments — no external Python deps.

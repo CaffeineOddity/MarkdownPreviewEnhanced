@@ -1,0 +1,37 @@
+MarkdownPreviewPro
+==================
+
+Thank you for installing MarkdownPreviewPro!
+
+A live, side-by-side markdown preview for Sublime Text — no external browser or
+HTML page is opened. The preview is rendered inline with Sublime's minihtml.
+
+Features
+--------
+- Toggle a right-hand preview panel with `super+shift+m` (macOS) /
+  `ctrl+shift+m` (Windows/Linux). The window splits 50/50.
+- Live updates as you type (500ms debounce).
+- Mermaid diagrams (rendered to SVG via mermaid-cli through npx).
+- Syntax-highlighted code blocks (Pygments).
+- Tables, fenced code, TOC, and more (python-markdown extensions).
+
+Requirements
+------------
+- Node.js (for mermaid rendering via `npx`). The first mermaid diagram will
+  fetch `@mermaid-js/mermaid-cli` through npx, which may take a moment.
+- python-markdown and Pygments are vendored under MarkdownPreviewPro/lib/, so
+  no external Python dependencies are required.
+
+Usage
+-----
+1. Open a `.md` file.
+2. Press `super+shift+m` (macOS) to toggle the preview.
+3. Edit — the preview updates live.
+
+Settings
+--------
+In your Preferences or `.sublime-project`:
+
+    "markdown_preview_pro.mermaid_theme": "default"   // or "dark", "forest"
+
+See the README for publishing details.
