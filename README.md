@@ -1,50 +1,54 @@
 # MarkdownPreviewPro
 
-A live, side-by-side Markdown preview plugin for Sublime Text — rendered inline
-with Sublime's minihtml, **no external browser or HTML page is opened**.
+Live Markdown preview in an external browser with full HTML+CSS rendering —
+native `<table>`, mermaid diagrams, and syntax-highlighted code blocks.
 
 ![preview](docs/screenshot.png)
 
 ## Features
 
-- **Toggle preview** with `super+shift+m` (macOS) / `ctrl+shift+m`
-  (Windows/Linux). The window splits 50/50; the preview lives on the right.
-- **Live updates** as you type (500ms debounce).
-- **Mermaid diagrams** rendered to SVG via [mermaid-cli](https://github.com/mermaid-js/mermaid-cli)
-  (invoked through `npx`, no global install required).
-- **Syntax-highlighted code blocks** via [Pygments](https://pygments.org/).
-- Tables, fenced code, TOC, attribute lists, and more (via
-  [python-markdown](https://python-markdown.github.io/) extensions).
+- **Browser preview** — full HTML+CSS engine (native `<table>`, GitHub-style
+  CSS).  No compromise on rendering quality.
+- **Live refresh** — file changes are picked up automatically via
+  `<meta http-equiv="refresh">` polling.
+- **Mermaid diagrams** — rendered to SVG by
+  [mermaid-cli](https://github.com/mermaid-js/mermaid-cli) (`mmdc`).
+- **Syntax-highlighted code blocks** — via [Pygments](https://pygments.org/).
+- **Multi-browser auto-detection** — Chrome, Safari, Firefox, Edge, Brave,
+  Opera.  Chrome-family browsers get AppleScript new-window + focus.
+- **Zero external Python deps** — python-markdown and Pygments are vendored
+  under `lib/`.
 
 ## Requirements
 
-- Sublime Text 4 (Build 4000+) — uses `window.new_html_sheet` / minihtml.
-- **Node.js** on your `PATH` (used only for Mermaid rendering through `npx`).
-  The first Mermaid diagram fetches `@mermaid-js/mermaid-cli`, which may take a
-  moment; results are cached.
-- **python-markdown** and **Pygments** are vendored under `MarkdownPreviewPro/lib/`,
-  so no external Python dependencies are required.
+- Sublime Text 4 (Build 4107+).
+- **Node.js** for mermaid rendering (optional — diagrams that fail to render
+  show a fallback error message).  First run may be slow while `npx` caches
+  `@mermaid-js/mermaid-cli`; results are cached on disk after that.
 
 ## Usage
 
 1. Open a `.md` file.
-2. Press `super+shift+m` (macOS) to toggle the preview panel.
-3. Keep editing — the preview updates live.
-4. Press the shortcut again (or close the preview sheet) to collapse back to a
-   single column.
+2. Press `super+shift+m` (macOS) / `ctrl+shift+m` (Windows/Linux).
+3. A browser window opens showing the rendered preview.
+4. Press `super+shift+m` again to close + reopen (refresh).
+5. Edit the markdown — the preview picks up changes within 1 second.
 
-### Commands (Command Palette)
+### Commands
 
-- `MarkdownPreviewPro: Toggle Preview`
-- `MarkdownPreviewPro: Refresh Preview`
+| Command | Description |
+| --- | --- |
+| `MarkdownPreviewPro: Toggle Preview` | Open/close the browser preview |
+| `MarkdownPreviewPro: Close Preview` | Close browser window |
+| `MarkdownPreviewPro: Refresh Preview` | Force re-render |
 
 ### Settings
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `markdown_preview_pro.mermaid_theme` | `"default"` | Mermaid theme: `default`, `dark`, or `forest`. |
+| `markdown_preview_pro.mermaid_theme` | `"default"` | Mermaid theme: `default`, `dark`, `forest`, `neutral`. |
 
-Example:
+Example in your `Preferences.sublime-settings`:
 
 ```jsonc
 {
@@ -54,57 +58,69 @@ Example:
 
 ## How it works
 
-The plugin converts the current markdown buffer to HTML with python-markdown
-(fenced code, tables, codehilite, toc, attr_list, nl2br). Mermaid fenced code
-blocks are intercepted and rendered to inline SVG via mermaid-cli; all other
-fenced blocks are syntax-highlighted with Pygments. The resulting HTML document
-(with inlined CSS and SVG) is shown in a Sublime HTML sheet using minihtml —
-displayed directly inside the editor window, split 50/50 with the source.
+1. The plugin reads the current markdown buffer.
+2. Mermaid fenced code blocks are extracted and rendered to SVG via `mmdc`
+   (subprocess calling `npx`).
+3. The rest of the markdown is converted to HTML by python-markdown with
+   extensions: tables, fenced_code, codehilite, toc, attr_list, nl2br.
+4. The SVG and HTML are assembled into a full `<!DOCTYPE html>` document with
+   inlined CSS, and written to
+   `~/Downloads/MarkdownPreviewPro/preview.html`.
+5. The file is opened in the default browser via `file://` URL.  The page
+   polls for file changes and auto-refreshes.
 
-Mermaid SVGs are cached by `sha256(theme + source)` under
-`Cache/MarkdownPreviewPro/mermaid/` to avoid re-running mermaid-cli on every
-keystroke.
+Debug logs and the last rendered HTML are also written to
+`~/Downloads/MarkdownPreviewPro/` (`debug.log`, `last_html.html`).
 
 ## Installation
 
-### Via Package Control (once published)
+### Via Package Control
 
-1. Open the Command Palette → `Package Control: Install Package`.
-2. Search for `MarkdownPreviewPro` and select it.
+Open the Command Palette → `Package Control: Install Package` → search for
+`MarkdownPreviewPro`.
 
 ### Manual
 
 Copy the `MarkdownPreviewPro` folder into your Sublime Text `Packages/`
 directory:
 
-- macOS: `~/Library/Application Support/Sublime Text/Packages/`
-- Linux: `~/.config/sublime-text/Packages/`
-- Windows: `%APPDATA%\Sublime Text\Packages\`
+| Platform | Path |
+| --- | --- |
+| macOS | `~/Library/Application Support/Sublime Text/Packages/` |
+| Linux | `~/.config/sublime-text/Packages/` |
+| Windows | `%APPDATA%\Sublime Text\Packages\` |
 
-## Publishing to Package Control
+## Development
 
-This repository is structured to be listed on
-[packagecontrol.io](https://packagecontrol.io). To submit:
+### Build & deploy
 
-1. Tag a release with a semantic version, e.g. `git tag 1.0.0 && git push --tags`.
-2. Open a PR against [`packagecontrol/package_control`](https://github.com/wbond/package_control)
-   adding an entry under `repository/` (see `repository.json.example` in this
-   repo) — or use the "Submit a Package" page on packagecontrol.io.
-3. Ensure `repository.json` reflects your public git URL and the release
-   tag.
+```bash
+./build.sh                    # rsync into ST Packages/ with backup
+```
 
-A ready-to-use `repository.json` snippet is provided in
-[`repository.json`](repository.json).
+### Release
 
-### Pre-publish checklist
+```bash
+./release.sh 1.0.1            # tag + push + create Package Control PR
+./release.sh 1.0.1 --dry-run  # preview only, nothing pushed
+```
 
-- [ ] `git init` the repo and push to a public GitHub/GitLab URL.
-- [ ] Replace `YOUR_GITHUB_USER` in `repository.json` with your account.
-- [ ] Tag the first release: `git tag 1.0.0`.
-- [ ] `messages.json` + `messages/1.0.0.txt` release note (present).
-- [ ] Submit via packagecontrol.io → "Submit a Package", pasting the
-      `repository.json` URL (host the `repository.json` file at the repo root).
-- [ ] Verify the package installs cleanly via Package Control on a fresh ST.
+The script:
+1. Runs `build.sh` to sync the latest code.
+2. Creates a git tag and pushes to GitHub.
+3. Forks [`sublimehq/package_control_channel`](https://github.com/sublimehq/package_control_channel).
+4. Updates `repository/m.json` with the new entry (or inserts it alphabetically).
+5. Pushes the fork and creates/updates a PR.
+
+### Debug logs
+
+All output goes to `~/Downloads/MarkdownPreviewPro/`:
+
+| File | Content |
+| --- | --- |
+| `preview.html` | Live HTML (what the browser loads) |
+| `last_html.html` | Snapshot of the last rendered HTML |
+| `debug.log` | Timestamped plugin logs |
 
 ## License
 
