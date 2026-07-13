@@ -1,7 +1,7 @@
 # MarkdownPreviewEnhanced
 
 > Package id: **MarkdownPreviewEnhanced**  
-> Browser-first live Markdown preview for Sublime Text — zero install dependencies.
+> Browser-first live Markdown preview for Sublime Text — SSE push, zero install dependencies.
 
 ![preview](./img/preview.png)
 
@@ -10,7 +10,7 @@
 | Feature | Status |
 |--------|--------|
 | GitHub-inspired full HTML+CSS rendering | ✅ |
-| Live refresh (preserves scroll position) | ✅ |
+| SSE push live refresh (no polling, preserves scroll) | ✅ |
 | Mermaid diagrams (flowchart, sequence, gantt, …) | ✅ |
 | ECharts charts (pie, bar, line, scatter, …) | ✅ |
 | KaTeX math rendering (`$...$`, `$$...$$`) | ✅ |
@@ -21,7 +21,9 @@
 | Code syntax highlighting (Pygments) | ✅ |
 | Scroll sync (editor ↔ preview) | ✅ |
 | Export to standalone HTML | ✅ |
-| Export to PDF (headless Chrome) | ✅ |
+| Export to PNG (html2canvas, in-browser) | 🖼️ |
+| Export to PDF (headless Chrome) | ✅ (ST command) |
+| Export toolbar (PNG + HTML buttons on preview page) | ✅ |
 | Relative image resolution (`./img/a.png`) | ✅ |
 | Cross-platform (macOS / Windows / Linux) | ✅ |
 | Dark mode friendly | ✅ |
@@ -30,17 +32,26 @@
 ## Requirements
 
 - Sublime Text 4 (Build 4107+)
-- **Nothing else** — python-markdown, Pygments, KaTeX, Mermaid, ECharts are all vendored
-- Chrome / Chromium optional — PDF export only
+- **Nothing else** — python-markdown, Pygments, KaTeX, Mermaid, ECharts, html2canvas are all vendored
+- Chrome / Chromium optional — PDF export only (via ST command)
 
 ## Usage
 
 1. Open a `.md` file.
 2. Press `Ctrl+Shift+M` (Windows/Linux) / `Cmd+Shift+M` (macOS).
 3. A browser tab opens with the live preview.
-4. Edit the markdown — the body updates every 5s without losing scroll.
-5. Press the shortcut again to **focus the existing preview tab** (and refresh).
+4. Edit the markdown — the plugin re-renders and **SSE pushes** the update to the browser in-place. No polling, no scroll loss.
+5. Press the shortcut again to **focus the existing preview tab**.  
    Use **Close Preview** to close the tab and stop the local server.
+
+### Preview page toolbar
+
+The preview page has export buttons in the bottom-left corner:
+
+| Button | Action |
+|--------|--------|
+| 🖼️ | Export PNG — captures the rendered preview via html2canvas (2x resolution) |
+| 💾 | Export HTML — downloads a clean standalone HTML file (no toolbar, no scripts) |
 
 ### Shortcuts
 
@@ -69,7 +80,7 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | --- | --- | --- |
 | `mermaid_theme` | `"default"` | `default`, `dark`, `forest`, `neutral` |
 | `output_dir` | `""` | Empty = Sublime cache |
-| `use_local_server` | `true` | Local HTTP server for refresh / images / scroll sync |
+| `use_local_server` | `true` | Local HTTP server for SSE push / images / scroll sync |
 | `server_port` | `8765` | Preferred port (tries next ports if busy) |
 | `server_idle_seconds` | `45` | Auto-stop server after no browser activity (`0` = only on Close) |
 | `browser` | `"auto"` | `auto`, `default`, `chrome`, `safari`, `firefox`, `edge`, … |
@@ -89,6 +100,41 @@ View-level override example:
     "markdown_preview_enhanced.mermaid_theme": "forest"
 }
 ```
+
+## Architecture
+
+```
+Sublime Text edits .md
+       │
+       ▼ on_modified_async (debounce 500ms)
+  Python: render markdown → full HTML page
+       │
+       ▼ update_content()
+  PreviewState updated
+       │
+       ▼ SSE push ("content" event)
+  Browser: EventSource receives event
+       │
+       ▼ applyContent()
+  DOM updated in-place (innerHTML swap)
+  KaTeX, ECharts, Mermaid re-rendered
+  Scroll position unchanged
+```
+
+The browser maintains one persistent SSE connection (`GET /api/stream`). The server pushes content only when the markdown changes. No polling, no page reloads.
+
+API endpoints:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /` | Serve full HTML preview page |
+| `GET /api/stream` | SSE push (content + editor line) |
+| `POST /api/browser_scroll` | Scroll sync (browser → editor) |
+| `GET /api/export/html` | Clean standalone HTML export |
+| `GET /api/export/pdf` | PDF export (Chrome headless) |
+| `GET /api/export/png` | PNG export (Chrome headless) |
+| `GET /assets/*` | Vendored JS/CSS/fonts |
+| `GET /doc/*` | Local images from document directory |
 
 ## Installation
 
