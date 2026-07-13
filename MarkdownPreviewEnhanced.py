@@ -229,8 +229,7 @@ def _publish(result, view, force_open=False):
     if force_open or not _preview_open:
         url = _preview_url()
         preferred = config.get("browser", "auto") or "auto"
-        # Prefer focusing an existing preview tab; open only if missing.
-        ok = _browser.open(url, preferred=preferred, log=_log, focus_existing=True)
+        ok = _browser.open(url, preferred=preferred, log=_log, focus_existing=False)
         if ok:
             _preview_open = True
             if view is not None:
@@ -243,21 +242,6 @@ def _publish(result, view, force_open=False):
             if SERVER.running:
                 _preview_open = True
                 _start_scroll_poller()
-
-
-def _focus_preview_browser():
-    """Bring the existing preview tab to the front."""
-    global _preview_open
-    url = _preview_url()
-    preferred = config.get("browser", "auto") or "auto"
-    ok = _browser.focus(url=url, log=_log)
-    if not ok:
-        # Fallback: open/focus path
-        ok = _browser.open(url, preferred=preferred, log=_log, focus_existing=True)
-    if ok:
-        _preview_open = True
-        _start_scroll_poller()
-    return ok
 
 
 def _start_scroll_poller():
@@ -355,7 +339,7 @@ def _render_settings():
 
 class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
     def run(self):
-        """Open preview, or if already running, focus the browser tab + refresh."""
+        """Open preview. Closes any existing preview tab first (avoids tab accumulation)."""
         view = self.window.active_view()
         if view is None:
             _log("no view to preview")
@@ -363,17 +347,9 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
             return
 
         if _preview_alive():
-            # Already running: re-render and jump to the existing browser tab.
-            _log("toggle: preview already open → focus tab + refresh")
-            MarkdownPreviewEnhancedListener.render_view(
-                view, force=True, open_browser=False)
-            if _focus_preview_browser():
-                self.window.status_message(
-                    "MarkdownPreviewEnhanced: focused preview (%s)" % _preview_url())
-            else:
-                self.window.status_message(
-                    "MarkdownPreviewEnhanced: could not focus browser; try Close then Toggle")
-            return
+            # Close old browser tab, keep server running
+            _log("toggle: closing old tab before re-open")
+            _close_preview_ui(stop_server=False)
 
         _log("toggle: opening preview")
         self.window.status_message("MarkdownPreviewEnhanced: opening preview…")
@@ -572,9 +548,6 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
                     # force_open if user asked to open and we still aren't live
                     need_open = open_browser and not _preview_alive()
                     _publish(result, view, force_open=need_open)
-                    if open_browser and _preview_alive():
-                        # Ensure browser is frontmost after first paint
-                        _focus_preview_browser()
                 except Exception:
                     _log("publish failed:\n%s" % traceback.format_exc())
 
