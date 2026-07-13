@@ -88,7 +88,7 @@ def _preview_url():
         if not SERVER.running:
             _ensure_server()
         if SERVER.running:
-            return SERVER.base_url + "/?_=" + str(int(time.time() * 1000))
+            return SERVER.base_url + "/"
     return "file://" + config.preview_path()
 
 
@@ -229,7 +229,7 @@ def _publish(result, view, force_open=False):
     if force_open or not _preview_open:
         url = _preview_url()
         preferred = config.get("browser", "auto") or "auto"
-        ok = _browser.open(url, preferred=preferred, log=_log, focus_existing=False)
+        ok = _browser.open(url, preferred=preferred, log=_log, focus_existing=True)
         if ok:
             _preview_open = True
             if view is not None:
@@ -339,7 +339,6 @@ def _render_settings():
 
 class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
     def run(self):
-        """Open preview. Closes any existing preview tab first (avoids tab accumulation)."""
         view = self.window.active_view()
         if view is None:
             _log("no view to preview")
@@ -347,9 +346,10 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
             return
 
         if _preview_alive():
-            # Close old browser tab, keep server running
-            _log("toggle: closing old tab before re-open")
-            _close_preview_ui(stop_server=False)
+            _log("toggle: already open → refresh")
+            MarkdownPreviewEnhancedListener.render_view(view, force=True, open_browser=False)
+            self.window.status_message("MarkdownPreviewEnhanced: refreshed")
+            return
 
         _log("toggle: opening preview")
         self.window.status_message("MarkdownPreviewEnhanced: opening preview…")
