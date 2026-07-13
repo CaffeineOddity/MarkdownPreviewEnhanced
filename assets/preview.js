@@ -76,6 +76,10 @@
       }
     });
 
+    es.addEventListener("close", function () {
+      window.close();
+    });
+
     es.addEventListener("editorLine", function (e) {
       try {
         var d = JSON.parse(e.data);

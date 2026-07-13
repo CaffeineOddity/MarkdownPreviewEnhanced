@@ -18,6 +18,7 @@ from .html_builder import build_preview_shell
 from .md_renderer import render as render_markdown, set_debug_log_path
 from .preview_server import (
     SERVER,
+    close_browser_tabs,
     pop_browser_line,
     seconds_since_activity,
     set_editor_line,
@@ -336,6 +337,13 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
             _log("no view to preview")
             self.window.status_message("MarkdownPreviewEnhanced: no active view")
             return
+
+        # Close old tab via SSE (tab closes itself), then open new one
+        if SERVER.running:
+            try:
+                close_browser_tabs()
+            except Exception:
+                pass
 
         _log("toggle: open preview")
         self.window.status_message("MarkdownPreviewEnhanced: opening preview…")

@@ -108,6 +108,12 @@ def pop_browser_line():
         return line, seq
 
 
+def close_browser_tabs():
+    """Push a 'close' event to all connected SSE listeners — each tab closes itself."""
+    with _STATE.lock:
+        _STATE._notify_sse("close", "{}")
+
+
 def set_output_dir(path):
     with _STATE.lock:
         _STATE.output_dir = path
