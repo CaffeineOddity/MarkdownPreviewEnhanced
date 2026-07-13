@@ -85,7 +85,6 @@ def update_content(body_html, toc_html, full_html, content_hash, doc_dir, shell_
             _STATE.export_base_dir = export_base_dir
         if export_settings is not None:
             _STATE.export_settings = export_settings
-        _STATE.last_activity = time.time()
         # Push to SSE listeners — browser updates DOM in-place, no reload
         payload = json.dumps({
             "html": _STATE.body_html,

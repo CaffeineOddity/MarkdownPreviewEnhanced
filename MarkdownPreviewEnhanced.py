@@ -337,7 +337,7 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
             self.window.status_message("MarkdownPreviewEnhanced: no active view")
             return
 
-        if _preview_alive() and seconds_since_activity() < 10:
+        if _preview_alive() and seconds_since_activity() < 5:
             # Tab likely still open — just re-render, SSE pushes update
             _log("toggle: tab likely open → refresh via SSE")
             MarkdownPreviewEnhancedListener.render_view(view, force=True, open_browser=False)
