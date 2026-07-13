@@ -227,20 +227,13 @@ def _publish(result, view, force_open=False):
 
     if force_open or not _preview_open:
         url = _preview_url()
-        preferred = config.get("browser", "auto") or "auto"
-        ok = _browser.open(url, preferred=preferred, log=_log, focus_existing=True)
-        if ok:
-            _preview_open = True
-            if view is not None:
-                _bound_view_id = view.id()
-            _log("preview ready: %s" % url)
-            _start_scroll_poller()
-        else:
-            _log("failed to open/focus browser for %s" % url)
-            # Still mark open if server is up so content can be hit manually.
-            if SERVER.running:
-                _preview_open = True
-                _start_scroll_poller()
+        import webbrowser as _wb
+        _wb.open(url)
+        _preview_open = True
+        if view is not None:
+            _bound_view_id = view.id()
+        _log("preview ready: %s" % url)
+        _start_scroll_poller()
 
 
 def _start_scroll_poller():
@@ -344,10 +337,12 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
             self.window.status_message("MarkdownPreviewEnhanced: no active view")
             return
 
-        # Always close old tab (best effort) and open fresh.
-        # The stable URL ensures the browser reuses the same tab.
-        if _preview_open:
-            _close_preview_ui(stop_server=False)
+        if _preview_alive() and seconds_since_activity() < 10:
+            # Tab likely still open — just re-render, SSE pushes update
+            _log("toggle: tab likely open → refresh via SSE")
+            MarkdownPreviewEnhancedListener.render_view(view, force=True, open_browser=False)
+            self.window.status_message("MarkdownPreviewEnhanced: refreshed")
+            return
 
         _log("toggle: opening preview")
         self.window.status_message("MarkdownPreviewEnhanced: opening preview…")

@@ -8,7 +8,6 @@
   var lastEditorLine = 0;
   var es = null;           // EventSource
   var reconnectTimer = null;
-  var ssePrimed = false;   // skip initial SSE event (page already has content)
 
   function $(id) {
     return document.getElementById(id);
@@ -70,8 +69,6 @@
     es = new EventSource("/api/stream");
 
     es.addEventListener("content", function (e) {
-      // Skip the initial snapshot — page already has the latest content
-      if (!ssePrimed) { ssePrimed = true; return; }
       try {
         applyContent(JSON.parse(e.data));
       } catch (err) {
