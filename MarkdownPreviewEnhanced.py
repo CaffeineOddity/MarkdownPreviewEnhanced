@@ -98,8 +98,14 @@ def _preview_alive():
     if not _preview_open:
         return False
     if config.get("use_local_server", True) and not SERVER.running:
-        # Stale flag after idle-stop or crash — recover.
         _log("preview flag was set but server is down; treating as closed")
+        _preview_open = False
+        return False
+    # If no HTTP activity for a while, browser tab was likely closed manually
+    idle_limit = float(config.get("server_idle_seconds", 45) or 0)
+    check_idle = max(min(idle_limit * 0.3, 10), 5) if idle_limit > 0 else 10
+    if seconds_since_activity() > check_idle:
+        _log("no recent activity (%.0fs) — treating preview as closed" % seconds_since_activity())
         _preview_open = False
         return False
     return True
