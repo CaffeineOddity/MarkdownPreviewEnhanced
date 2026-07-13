@@ -117,25 +117,35 @@ class BrowserSession:
     def close(self, preview_file_hint=None, log=None):
         log = log or (lambda m: None)
         hint = preview_file_hint or _url_hint(self.last_url)
-        if self.system == "Darwin" and self.as_name and hint:
-            try:
-                hint = str(hint).replace("\\", "/").replace('"', "")
-                if self.as_name == "Safari":
-                    script = self._safari_close_script(hint)
-                else:
-                    script = self._chrome_close_script(self.as_name, hint)
-                subprocess.run(
-                    ["osascript", "-e", script],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
-            except Exception as e:
-                log("close AppleScript failed: %s" % e)
+        if not hint:
+            log("close: no hint available")
+            return
+        if self.system == "Darwin":
+            hint = str(hint).replace("\\", "/").replace('"', "")
+            # Collect unique AppleScript names, self.as_name first
+            as_names = []
+            if self.as_name:
+                as_names.append(self.as_name)
+            for _bid, _name, an, _tab in _MAC_BROWSERS:
+                if an and an not in as_names:
+                    as_names.append(an)
+            for an in as_names:
+                try:
+                    if an == "Safari":
+                        script = self._safari_close_script(hint)
+                    else:
+                        script = self._chrome_close_script(an, hint)
+                    subprocess.run(
+                        ["osascript", "-e", script],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+                except Exception:
+                    pass
         if self.proc is not None:
             try:
                 self.proc.terminate()
             except Exception:
                 pass
             self.proc = None
-        log("browser closed")
 
     # ── macOS ───────────────────────────────────────────────────────────────
 
