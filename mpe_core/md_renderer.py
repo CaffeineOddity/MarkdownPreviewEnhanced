@@ -32,7 +32,63 @@ def _mdpp_log(msg):
 
 
 try:
+    # 让 mpe_core 内 vendored 的 markdown / pygments 同时以「相对包」和「顶层名」两种身份
+    # 可被导入，且两条路径解析到 *同一份* 模块对象。
+    #
+    # 背景：python-markdown / pygments 内部大量使用绝对导入
+    #   - `from markdown.treeprocessors import ...`（legacy_attrs）
+    #   - `from pygments import highlight`（codehilite）
+    #   - `from pygments.util import ...`（pygments/__init__.py 顶部）
+    # 若只做 `from . import markdown` 而不注册顶层名，这些绝对导入会 No module named。
+    #
+    # 关键陷阱 1（pygments 循环导入）：pygments/__init__.py 在模块体顶部就执行
+    #   `from pygments.util import ...`。若直接 `from . import pygments`，import 机制在
+    #   __init__.py 执行期间尚未把顶层名 pygments 写入 sys.modules，于是这一行立即报
+    #   No module named 'pygments'。解法：先在 sys.modules['pygments'] 放一个占位包，
+    #   __path__ 指向真实 pygments 目录，再用 importlib 真正加载 .pygments（加载时就地
+    #   填充占位包属性），这样 __init__ 里的 `from pygments.util import ...` 能在
+    #   占位包 __path__ 下找到子模块。
+    #
+    # 关键陷阱 2（Extension 类身份分裂）：markdown.core 顶层 `from .extensions import
+    #   Extension` 得到的是 MarkdownPreviewEnhanced.mpe_core.markdown.extensions.Extension；
+    #   而 build_extension 把字符串 "markdown.extensions.fenced_code" 交给 importlib，
+    #   该模块 `from . import Extension` 解析出的却是 markdown.extensions.Extension。
+    #   两个 Extension 来自不同模块对象 → isinstance 判定失败 → TypeError。解法：把
+    #   sys.modules['markdown'] 直接指向相对包对象 _md（而非另造占位包），让顶层名与
+    #   相对包共享同一份模块树，两条导入路径得到同一个 Extension 类。
+    import sys as _sys
+    import types as _types
+    import importlib as _importlib
+    import os as _os
+
     from . import markdown as _md
+    # 让 vendored markdown 包同时以相对名（MarkdownPreviewEnhanced.mpe_core.markdown）
+    # 和顶层名（markdown）可被导入，且两条路径复用同一份模块对象。
+    #
+    # 关键陷阱：markdown.core 顶层 `from .extensions import Extension` 得到的是相对包的
+    # Extension 类；而 build_extension 把字符串 "markdown.extensions.fenced_code" 交给
+    # importlib，该模块 `from . import Extension` 又解析出顶层名下的 Extension 类。若
+    # 两条路径是两份独立模块对象 → Extension 类身份分裂 → isinstance 失败 →
+    # TypeError: Extension ... must be of type ...。
+    #
+    # 解法：把已加载的相对包及其所有子模块，按顶层名（markdown / markdown.extensions /
+    # markdown.util …）逐一注册到 sys.modules 指向同一对象；再把顶层 markdown 的
+    # __name__ 归一为 "markdown"，使后续 build_extension 的绝对导入命中同一模块树。
+    _MPE_PREFIX = __package__ + ".markdown"
+    for _k in list(_sys.modules):
+        if _k == _MPE_PREFIX or _k.startswith(_MPE_PREFIX + "."):
+            _sys.modules["markdown" + _k[len(_MPE_PREFIX):]] = _sys.modules[_k]
+    _md = _sys.modules["markdown"]
+    _md.__name__ = "markdown"
+
+    _pyg_dir = _os.path.join(_os.path.dirname(__file__), "pygments")
+    _pyg = _types.ModuleType("pygments")
+    _pyg.__path__ = [_pyg_dir]
+    _pyg.__package__ = "pygments"
+    _sys.modules["pygments"] = _pyg
+    _importlib.import_module(".pygments", __package__)
+    _pygments = _sys.modules["pygments"]
+
     from .markdown.extensions.codehilite import CodeHiliteExtension
     from .markdown.extensions.toc import TocExtension
     _HAS_MARKDOWN = True
