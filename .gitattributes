@@ -9,6 +9,7 @@
 /LICENSE            export-ignore
 /build.sh           export-ignore
 /release.sh         export-ignore
+/st_package_reviewer.sh export-ignore
 /docs/              export-ignore
 /img/               export-ignore
 *.sublime-project   export-ignore

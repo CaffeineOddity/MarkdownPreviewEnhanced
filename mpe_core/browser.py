@@ -1,11 +1,11 @@
 """Cross-platform browser open / close / focus for MarkdownPreviewEnhanced."""
 import os
-import platform
 import subprocess
 import sys
 import webbrowser
 
-_SYSTEM = platform.system()
+# 用 sys.platform 判断系统,避免 import platform(评审告警);保持 "Darwin"/"Windows"/"Linux" 取值不变
+_SYSTEM = {"darwin": "Darwin", "win32": "Windows"}.get(sys.platform, "Linux")
 
 
 def _startupinfo():

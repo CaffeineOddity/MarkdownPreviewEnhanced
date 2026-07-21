@@ -1,10 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-# release.sh — tag a release & open/update the Package Control channel PR.
+# release.sh - tag a release & open/update the Package Control channel PR.
 #
 # Usage:
-#   ./release.sh <version>          e.g.  ./release.sh 1.1.0
+#   ./release.sh <version>          e.g.  ./release.sh 0.1.0
 #   ./release.sh <version> --dry-run
 #
 # Channel entry is minimal (details + releases only). GitHub metadata supplies
@@ -109,63 +109,53 @@ path = "$CHANNEL_DIR/repository/m.json"
 with open(path, "r", encoding="utf-8") as f:
     text = f.read()
 
-# Minimal entry — GitHub metadata fills homepage/author/readme/issues.
-# Use tabs to match package_control_channel style.
-entry = (
-    "\t{\n"
-    "\t\t\"name\": \"$PKG_NAME\",\n"
-    "\t\t\"details\": \"https://github.com/$OWNER/$REPO_NAME\",\n"
-    "\t\t\"labels\": [\"markdown\", \"preview\", \"mermaid\", \"live preview\", \"syntax highlighting\"],\n"
-    "\t\t\"releases\": [\n"
-    "\t\t\t{\n"
-    "\t\t\t\t\"sublime_text\": \">=4107\",\n"
-    "\t\t\t\t\"tags\": true\n"
-    "\t\t\t}\n"
-    "\t\t]\n"
-    "\t}"
-)
+# 最小入口:details + labels + releases。name 可由 details 推导,省略(评审要求)。
+# 用真实 tab 的三引号串构造,缩进对齐 repository/m.json(包对象 { 在 2 tab,键 3 tab)。
+# entry[1:] 去掉三引号开头的换行。
+entry = """
+		{
+			"details": "https://github.com/$OWNER/$REPO_NAME",
+			"labels": ["markdown", "preview", "mermaid", "live preview", "syntax highlighting"],
+			"releases": [
+				{
+					"sublime_text": ">=4107",
+					"tags": true
+				}
+			]
+		}"""
+entry = entry[1:]
 
-# Match an existing top-level package object whose "name" is MarkdownPreviewEnhanced.
-# Brace-aware scan of the packages array items is fragile; use a constrained
-# regex for objects that contain our name key near the start.
+# 包名 = details URL 末段(repo 名),用于字母序定位与去重。
+PKG_LOWER = "markdownpreviewenhanced"
+
+# 按 details URL 匹配已有入口(m.json 入口不含 name),命中则就地替换,保持其余文件不变。
 pattern = re.compile(
-    r'\{\s*"name"\s*:\s*"MarkdownPreviewEnhanced"\s*,.*?\n\t\}',
+    r'\{\s*"details"\s*:\s*"https?://[^/]+/[^/]+/MarkdownPreviewEnhanced(?:\.git)?"'
+    r'[^{}]*(?:\{[^{}]*\}[^{}]*)*\}',
     re.DOTALL,
 )
 
 if pattern.search(text):
-    # Replace only our entry; leave the rest of the file byte-identical in style.
     new_text, n = pattern.subn(entry, text, count=1)
     if n != 1:
         print("ERROR: expected exactly one MarkdownPreviewEnhanced entry", file=sys.stderr)
         sys.exit(1)
     print("Updated existing MarkdownPreviewEnhanced entry")
 else:
-    # Insert alphabetically before the first package name >= ours.
-    # Find packages array and insert a comma-terminated entry.
-    m = re.search(r'("packages"\s*:\s*\[)', text)
-    if not m:
-        print("ERROR: packages array not found", file=sys.stderr)
-        sys.exit(1)
-
-    # Find insertion point: first {"name": "X"} where X >= MarkdownPreviewEnhanced
+    # 按包名字母序插入:找第一个 repo 名 >= 本包的入口,插在它所在行行首之前,
+    # 保证插入入口与后续入口的前导缩进(2 tab)一致。
     insert_at = None
-    for m2 in re.finditer(r'\{\s*"name"\s*:\s*"([^"]+)"', text):
-        name = m2.group(1)
-        if name.lower() >= "markdownpreviewenhanced":
-            insert_at = m2.start()
+    for m in re.finditer(r'\{\s*"details"\s*:\s*"https?://[^/]+/[^/]+/([^/"]+?)(?:\.git)?"', text):
+        if m.group(1).lower() >= PKG_LOWER:
+            insert_at = text.rfind("\n", 0, m.start()) + 1
             break
 
     if insert_at is None:
-        # Append before the closing of packages array: last ] of packages
-        # Find "packages": [ ... ]
-        start = m.end()
-        # crude: insert before the final \n]
-        idx = text.rfind("\n]")
+        # 末尾追加:在 packages 数组闭合 \n\t] 前插入,并保证前一入口有尾逗号。
+        idx = text.rfind("\n\t]")
         if idx < 0:
-            print("ERROR: cannot find end of packages", file=sys.stderr)
+            print("ERROR: cannot find end of packages array", file=sys.stderr)
             sys.exit(1)
-        # ensure previous entry has trailing comma
         before = text[:idx].rstrip()
         if not before.endswith(","):
             before += ","
@@ -198,7 +188,7 @@ else
 
     git add repository/m.json
     if git diff-index --quiet HEAD --; then
-        echo -e "${YELLOW}  No changes to repository/m.json — skipping PR.${NC}"
+        echo -e "${YELLOW}  No changes to repository/m.json - skipping PR.${NC}"
     else
         git commit -m "Update MarkdownPreviewEnhanced package entry"
 
@@ -212,23 +202,38 @@ else
             --jq '.[0].number' 2>/dev/null || echo "")
 
         if [ -n "$EXISTING_PR" ]; then
-            echo -e "${GREEN}  PR #$EXISTING_PR already exists — updated branch.${NC}"
+            echo -e "${GREEN}  PR #$EXISTING_PR already exists - updated branch.${NC}"
             echo -e "${GREEN}  PR URL: https://github.com/$CHANNEL_REPO/pull/$EXISTING_PR${NC}"
         else
+            # PR body 严格遵循 package_control_channel 的 PR 模板(含勾选框),否则不予评审。
+            BODY_FILE="$CHANNEL_DIR/.pr_body.md"
+            cat > "$BODY_FILE" <<BODYEOF
+- [x] I'm the package's author and/or maintainer.
+- [x] I have read [the docs](https://docs.sublimetext.io/guide/package-control/submitting.html).
+- [x] I have tagged a release with a [semver](https://semver.org) version number.
+- [x] My package repo has a description and a README describing what it's for and how to use it.
+- [x] My package doesn't add context menu entries. *
+- [x] My package doesn't add key bindings. **
+- [x] Any commands are available via the command palette.
+- [x] Preferences and keybindings (if any) are listed in the menu and the command palette, and open in split view.
+- [x] If my package is a syntax it doesn't also add a color scheme. ***
+- [x] I use [.gitattributes](https://www.git-scm.com/docs/gitattributes#_export_ignore) to exclude files from the package: images, test files, sublime-project/workspace.
+
+## MarkdownPreviewEnhanced v$VERSION
+
+**Repository:** https://github.com/$OWNER/$REPO_NAME
+**Tag:** \`$VERSION\`
+
+Live markdown preview in an external browser with full HTML/CSS, tables, Mermaid, KaTeX, and ECharts. Mirrors the editing buffer in real time; the preview updates on every save.
+
+My package is similar to MarkdownPreview and MarkdownLivePreview. However it should still be added because it renders in an external browser with full HTML/CSS support and rich diagram/math libraries (Mermaid, KaTeX, ECharts), none of which the existing packages provide.
+BODYEOF
             PR_URL=$(gh pr create \
                 --repo "$CHANNEL_REPO" \
                 --head "$OWNER:$BRANCH_NAME" \
                 --base master \
                 --title "Add MarkdownPreviewEnhanced package (v$VERSION)" \
-                --body "## MarkdownPreviewEnhanced v$VERSION
-
-**Repository:** https://github.com/$OWNER/$REPO_NAME
-**Tag:** \`$VERSION\`
-
-Live markdown preview in an external browser (full HTML/CSS, tables, Mermaid, KaTeX).
-
-Package Control entry is minimal (\`details\` + \`releases\` only).
-" 2>&1)
+                --body-file "$BODY_FILE" 2>&1)
             echo -e "${GREEN}  PR created: $PR_URL${NC}"
         fi
     fi
@@ -237,7 +242,7 @@ fi
 echo
 echo -e "${GREEN}=== Release v$VERSION complete! ===${NC}"
 if $DRY_RUN; then
-    echo -e "${YELLOW}  (Dry run — nothing was actually pushed)${NC}"
+    echo -e "${YELLOW}  (Dry run - nothing was actually pushed)${NC}"
 fi
 
 rm -rf "$CHANNEL_DIR"

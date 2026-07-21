@@ -1,6 +1,3 @@
 [
-    // MarkdownPreviewEnhanced 快捷键 — Linux，仅在 markdown 文件内生效
-    { "keys": ["ctrl+shift+m"], "command": "markdown_preview_enhanced_toggle", "context": [{ "key": "selector", "operator": "equal", "operand": "text.html.markdown" }] },
-    { "keys": ["ctrl+alt+shift+m"], "command": "markdown_preview_enhanced_close", "context": [{ "key": "selector", "operator": "equal", "operand": "text.html.markdown" }] },
-    { "keys": ["ctrl+shift+e"], "command": "markdown_preview_enhanced_export_html", "context": [{ "key": "selector", "operator": "equal", "operand": "text.html.markdown" }] },
+    // 默认不绑定快捷键,避免与其他包冲突。示例见 Default (Linux).sublime-keymap.example
 ]

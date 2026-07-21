@@ -26,6 +26,7 @@ rsync -av --delete \
     --exclude='.gitignore' \
     --exclude='build.sh' \
     --exclude='release.sh' \
+    --exclude='st_package_reviewer.sh' \
     --exclude='AGENTS.md' \
     --exclude='docs/' \
     --exclude='repository.json' \
