@@ -1,5 +1,0 @@
-MarkdownPreviewEnhanced 1.2.0
-==========================
-
-- Package Control review fixes: repo root = package root, no repository.json,
-  minimal channel metadata, local-only KaTeX, language-neutral HTML, improved CSS.
