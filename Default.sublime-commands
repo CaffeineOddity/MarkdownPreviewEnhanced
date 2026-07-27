@@ -23,7 +23,8 @@
         "caption": "Preferences: MarkdownPreviewEnhanced Settings",
         "command": "edit_settings",
         "args": {
-            "base_file": "${packages}/MarkdownPreviewEnhanced/MarkdownPreviewEnhanced.sublime-settings"
+            "base_file": "${packages}/MarkdownPreviewEnhanced/MarkdownPreviewEnhanced.sublime-settings",
+            "default": "{}"
         }
     },
 ]
