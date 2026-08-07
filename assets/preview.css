@@ -106,6 +106,19 @@ body {
   color: var(--mdpp-muted);
   text-decoration: none;
   border-radius: 4px;
+  font-weight: 400;
+}
+
+/* Top-level TOC entries (document sections) read as bold labels */
+.mdpp-toc > .toc > ul > li > a {
+  color: var(--mdpp-fg);
+  font-weight: 600;
+}
+
+/* Nested entries stay lighter for hierarchy */
+.mdpp-toc > .toc > ul > li > ul a {
+  color: var(--mdpp-muted);
+  font-weight: 400;
 }
 
 .mdpp-toc a:hover {
@@ -115,7 +128,7 @@ body {
 
 .mdpp-toc .toctitle {
   display: block;
-  font-weight: 650;
+  font-weight: 700;
   color: var(--mdpp-fg);
   margin-bottom: 10px;
   font-size: 11px;

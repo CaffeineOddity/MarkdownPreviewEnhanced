@@ -50,7 +50,14 @@ if ! git diff-index --quiet HEAD --; then
 fi
 
 REMOTE_URL=$(git remote get-url origin)
-OWNER_REPO=$(echo "$REMOTE_URL" | sed -E 's|.*github.com[:/]([^/]+/[^/.]+)(\.git)?$|\1|')
+# Support github.com and generic git@host:owner/repo.git / https://host/owner/repo.git
+OWNER_REPO=$(echo "$REMOTE_URL" | sed -E \
+    -e 's|.*github.com[:/]([^/]+/[^/.]+)(\.git)?$|\1|' \
+    -e 's|.*[:/]([^/]+)/([^/]+?)(\.git)?$|\1/\2|')
+# If both sed patterns left a full URL, fall back to path-style parse
+if echo "$OWNER_REPO" | grep -qE '[:@]'; then
+    OWNER_REPO=$(echo "$REMOTE_URL" | sed -E 's|.*[:/]([^/]+)/([^/]+?)(\.git)?$|\1/\2|')
+fi
 OWNER="${OWNER_REPO%%/*}"
 REPO_NAME="${OWNER_REPO##*/}"
 
@@ -61,10 +68,17 @@ echo "  owner: $OWNER"
 echo "  package: $PKG_NAME"
 echo
 
-echo -e "${YELLOW}[1/4] Building & tagging${NC}"
+echo -e "${YELLOW}[1/4] Package Control zip verify & tagging${NC}"
 
+# Package Control installs a zip from the GitHub *tag* (``tags: true``), not
+# whatever happens to be in Packages/ locally. Fail the release if that zip
+# would be missing runtime files or fail the offline smoke test.
 if [ -x build.sh ]; then
-    ./build.sh
+    # Worktree must be clean (checked above), so this packs git archive = tag.
+    ./build.sh --verify --from-git
+else
+    echo -e "${RED}build.sh missing; cannot verify Package Control zip${NC}"
+    exit 1
 fi
 
 if $DRY_RUN; then

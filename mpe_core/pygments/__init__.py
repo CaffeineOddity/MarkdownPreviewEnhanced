@@ -27,7 +27,10 @@
 """
 import sys
 
-from pygments.util import StringIO, BytesIO
+# Relative import so loading under ``mpe_core.pygments`` does not re-enter
+# via the top-level ``pygments`` alias while this package is still mid-init
+# (absolute ``from pygments.util`` splits the module object; see docs/issue.md).
+from .util import StringIO, BytesIO
 
 __version__ = '2.5.2'
 __docformat__ = 'restructuredtext'

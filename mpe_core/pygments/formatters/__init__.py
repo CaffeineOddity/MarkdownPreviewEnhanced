@@ -151,4 +151,8 @@ oldmod = sys.modules[__name__]
 newmod = _automodule(__name__)
 newmod.__dict__.update(oldmod.__dict__)
 sys.modules[__name__] = newmod
-del newmod.newmod, newmod.oldmod, newmod.sys, newmod.types
+_alias = 'pygments.formatters'
+if _alias in sys.modules and sys.modules[_alias] is not newmod:
+    sys.modules[_alias] = newmod
+for _k in ('newmod', 'oldmod', 'sys', 'types'):
+    newmod.__dict__.pop(_k, None)

@@ -20,12 +20,40 @@ from __future__ import unicode_literals
 from . import Extension
 from ..treeprocessors import Treeprocessor
 
-try:
-    from pygments import highlight
-    from pygments.lexers import get_lexer_by_name, guess_lexer
-    from pygments.formatters import get_formatter_by_name
+# Pygments may not be importable yet when this module is first loaded (vendor
+# aliases under mpe_core are installed in a specific order). Resolve lazily so
+# a one-shot ImportError at import time does not permanently disable highlighting.
+pygments = False
+highlight = None
+get_lexer_by_name = None
+guess_lexer = None
+get_formatter_by_name = None
+
+
+def _ensure_pygments():
+    """Import pygments into this module's globals; return True on success."""
+    global pygments, highlight, get_lexer_by_name, guess_lexer, get_formatter_by_name
+    if pygments:
+        return True
+    try:
+        from pygments import highlight as _highlight
+        from pygments.lexers import get_lexer_by_name as _get_lexer_by_name
+        from pygments.lexers import guess_lexer as _guess_lexer
+        from pygments.formatters import get_formatter_by_name as _get_formatter_by_name
+    except ImportError:
+        pygments = False
+        return False
+    highlight = _highlight
+    get_lexer_by_name = _get_lexer_by_name
+    guess_lexer = _guess_lexer
+    get_formatter_by_name = _get_formatter_by_name
     pygments = True
-except ImportError:
+    return True
+
+
+try:
+    _ensure_pygments()
+except Exception:
     pygments = False
 
 
@@ -103,7 +131,7 @@ class CodeHilite(object):
         if self.lang is None:
             self._parseHeader()
 
-        if pygments and self.use_pygments:
+        if self.use_pygments and _ensure_pygments():
             try:
                 lexer = get_lexer_by_name(self.lang)
             except ValueError:

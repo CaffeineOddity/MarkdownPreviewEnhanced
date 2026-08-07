@@ -150,10 +150,18 @@ Clone or copy this repository **as** the package folder
 ## Development
 
 ```bash
-./build.sh                    # rsync package files into ST Packages/
-./release.sh 1.2.0            # tag + push + Package Control PR
+./build.sh                    # build PC-like .sublime-package, verify, install as zip
+./build.sh --dev              # rsync unpacked into Packages/ (live edit)
+./build.sh --verify --from-git  # pack git HEAD like Package Control + smoke test
+./release.sh 1.2.0            # verify zip, tag + push + Package Control PR
 ./release.sh 1.2.0 --dry-run  # preview only
 ```
+
+Package Control installs a **zipped** `.sublime-package` from the GitHub tag
+(`"tags": true`). `./build.sh` builds that zip (flat package root), checks
+required assets/modules, and runs an offline smoke test *against the zip* so
+local-only `open()` bugs cannot slip through. Prefer committing before
+`--from-git` / `release.sh` so the tag matches what you verified.
 
 `release.sh` updates only this package's entry in the channel file (no full
 reformat). Channel metadata is minimal (`details` + `releases`).

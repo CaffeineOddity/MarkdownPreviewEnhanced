@@ -2,6 +2,9 @@
 
 Avoids relying on browser CDN/async load order. Falls back to plain
 ``.mdpp-math`` markers for client-side render if Node is unavailable.
+
+KaTeX assets live inside the package (possibly a ``.sublime-package`` zip),
+so they are materialised into Sublime's cache directory before Node reads them.
 """
 import hashlib
 import os
@@ -9,20 +12,15 @@ import subprocess
 import json
 import threading
 
-from . import PACKAGE_ROOT
+from . import assets as pkg_assets
 
 _CACHE = {}
 _CACHE_LOCK = threading.Lock()
 _NODE = None
 _NODE_CHECKED = False
-_KATEX_JS = os.path.join(
-    PACKAGE_ROOT, "assets", "katex", "katex.min.js"
-)
-
-# One long-lived helper script path written next to katex.
-_HELPER = os.path.join(
-    PACKAGE_ROOT, "assets", "katex", "_render_worker.js"
-)
+_PATHS_LOCK = threading.Lock()
+_KATEX_JS = None  # set lazily via _ensure_katex_paths()
+_HELPER = None
 
 
 def _find_node():
@@ -58,10 +56,36 @@ def _find_node():
     return None
 
 
+def _ensure_katex_paths():
+    """Extract katex.min.js into the cache and return (js_path, helper_path)."""
+    global _KATEX_JS, _HELPER
+    with _PATHS_LOCK:
+        if (
+            _KATEX_JS
+            and os.path.isfile(_KATEX_JS)
+            and _HELPER
+            and os.path.isfile(_HELPER)
+        ):
+            return _KATEX_JS, _HELPER
+        root = pkg_assets.extract_katex()
+        if not root:
+            return None, None
+        js = os.path.join(root, "katex.min.js")
+        helper = os.path.join(root, "_render_worker.js")
+        if not os.path.isfile(js):
+            return None, None
+        _KATEX_JS = js
+        _HELPER = helper
+        return _KATEX_JS, _HELPER
+
+
 def _ensure_helper():
     """Write a tiny Node worker that reads JSON lines and prints HTML."""
-    if os.path.isfile(_HELPER) and os.path.getsize(_HELPER) > 50:
-        return _HELPER
+    js_path, helper = _ensure_katex_paths()
+    if not js_path or not helper:
+        return None
+    if os.path.isfile(helper) and os.path.getsize(helper) > 50:
+        return helper
     src = r"""
 const fs = require("fs");
 const vm = require("vm");
@@ -101,10 +125,14 @@ for (const job of jobs) {
 }
 process.stdout.write(JSON.stringify(out));
 """
-    os.makedirs(os.path.dirname(_HELPER), exist_ok=True)
-    with open(_HELPER, "w", encoding="utf-8") as f:
-        f.write(src.strip() + "\n")
-    return _HELPER
+    try:
+        os.makedirs(os.path.dirname(helper), exist_ok=True)
+        with open(helper, "w", encoding="utf-8") as f:
+            f.write(src.strip() + "\n")
+    except Exception as e:
+        print("[MarkdownPreviewEnhanced] katex SSR: cannot write helper: %s" % e)
+        return None
+    return helper
 
 
 def render_tex_batch(jobs):
@@ -122,9 +150,10 @@ def render_tex_batch(jobs):
             print("[MarkdownPreviewEnhanced] katex SSR: node not found on PATH")
             render_tex_batch._logged_no_node = True
         return None
-    if not os.path.isfile(_KATEX_JS):
+    js_path, _helper_path = _ensure_katex_paths()
+    if not js_path:
         if not getattr(render_tex_batch, "_logged_no_js", False):
-            print("[MarkdownPreviewEnhanced] katex SSR: missing %s" % _KATEX_JS)
+            print("[MarkdownPreviewEnhanced] katex SSR: katex.min.js unavailable")
             render_tex_batch._logged_no_js = True
         return None
 
@@ -149,6 +178,11 @@ def render_tex_batch(jobs):
         return results
 
     helper = _ensure_helper()
+    if not helper:
+        if not getattr(render_tex_batch, "_logged_no_helper", False):
+            print("[MarkdownPreviewEnhanced] katex SSR: helper script unavailable")
+            render_tex_batch._logged_no_helper = True
+        return None
     try:
         payload = json.dumps(
             [{"tex": j["tex"], "display": j["display"]} for j in todo_jobs],
