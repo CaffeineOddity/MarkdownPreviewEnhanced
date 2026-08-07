@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from urllib.parse import unquote, urlparse
 
-from . import PACKAGE_ROOT
+from . import assets as pkg_assets
 
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
@@ -353,9 +353,47 @@ class _Handler(BaseHTTPRequestHandler):
         self._serve_file(full)
 
     def _serve_package_asset(self, rel):
-        assets = os.path.join(PACKAGE_ROOT, "assets")
-        full = self._safe_join(assets, rel)
-        self._serve_file(full)
+        """Serve files from package assets/ via sublime resources (zip-safe)."""
+        rel = unquote(rel).replace("\\", "/")
+        parts = []
+        for p in rel.split("/"):
+            if p in ("", "."):
+                continue
+            if p == "..":
+                self.send_error(404)
+                return
+            parts.append(p)
+        if not parts:
+            self.send_error(404)
+            return
+        resource_rel = "assets/" + "/".join(parts)
+        data = pkg_assets.read_bytes(resource_rel)
+        if data is None:
+            self.send_error(404)
+            return
+        ext = os.path.splitext(parts[-1])[1].lower()
+        content_type = {
+            ".html": "text/html; charset=utf-8",
+            ".css": "text/css; charset=utf-8",
+            ".js": "application/javascript; charset=utf-8",
+            ".svg": "image/svg+xml",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".json": "application/json",
+            ".woff": "font/woff",
+            ".woff2": "font/woff2",
+            ".ttf": "font/ttf",
+            ".otf": "font/otf",
+        }.get(ext, "application/octet-stream")
+        self.send_response(200)
+        self._cors()
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def _serve_output(self, rel):
         with _STATE.lock:

@@ -1,0 +1,15 @@
+MarkdownPreviewEnhanced 0.1.1
+=============================
+
+Package Control / zip install fixes
+-----------------------------------
+- Fix markdown/pygments vendor imports under Sublime package naming
+  (``MarkdownPreviewEnhanced.mpe_core.*``), so fenced code and tables render.
+- Fix resource loading from ``.sublime-package`` zips via ``sublime.load_resource``
+  (preview CSS, highlight CSS, KaTeX, mermaid, fonts).
+- Fix code highlighting: register pygments before markdown, and lazy-load
+  pygments in codehilite so token colors work.
+- TOC: show "Contents" title; bold top-level entries.
+- ``build.sh`` now packages a Package Control-compatible zip, validates layout,
+  and runs offline smoke tests against the zip (not just unpacked Packages/).
+- ``release.sh`` verifies the git-archive zip before tagging.

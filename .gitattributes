@@ -1,7 +1,23 @@
-# Normalize line endings
+# Normalize line endings for text; keep binaries untouched.
 * text=auto
 
-# Exclude non-runtime files from packaged .sublime-package
+# Binary assets — never apply CRLF conversion (corrupts fonts / minified JS).
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.zip   binary
+*.min.js  binary
+*.min.css binary
+
+# Exclude non-runtime files from git archive / GitHub source zipballs
+# (Package Control with tags:true downloads these archives).
 /.gitattributes     export-ignore
 /.gitignore         export-ignore
 /AGENTS.md          export-ignore
@@ -12,6 +28,7 @@
 /mpe_core/pygments/formatters/img.py export-ignore
 /docs/              export-ignore
 /img/               export-ignore
+/dist/              export-ignore
 *.sublime-project   export-ignore
 *.sublime-workspace export-ignore
 *.sublime-keymap.example export-ignore

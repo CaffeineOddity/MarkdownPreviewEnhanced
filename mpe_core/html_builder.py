@@ -4,68 +4,52 @@ KaTeX and Mermaid are always served from vendored package assets — never from 
 """
 import os
 
-from . import PACKAGE_ROOT
+from . import assets as pkg_assets
 
 
-def _mermaid_js_path():
-    path = os.path.join(PACKAGE_ROOT, "assets", "mermaid.min.js")
-    if os.path.isfile(path):
-        return path
-    return None
-
-
-def _echarts_js_path():
-    path = os.path.join(PACKAGE_ROOT, "assets", "echarts.min.js")
-    if os.path.isfile(path):
-        return path
-    return None
+def _asset_exists(name):
+    return pkg_assets.exists("assets/" + name)
 
 
 def _load_asset(name):
-    path = os.path.join(PACKAGE_ROOT, "assets", name)
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    except Exception:
-        return ""
+    """Read a text asset from the package (works for zip and unpacked installs)."""
+    return pkg_assets.read_text("assets/" + name)
 
 
-def _katex_local_paths():
-    base = os.path.join(PACKAGE_ROOT, "assets", "katex")
-    css = os.path.join(base, "katex.min.css")
-    js = os.path.join(base, "katex.min.js")
-    if os.path.isfile(css) and os.path.isfile(js):
-        return css, js
-    return None, None
+def _katex_available():
+    return (
+        pkg_assets.exists("assets/katex/katex.min.css")
+        and pkg_assets.exists("assets/katex/katex.min.js")
+    )
 
 
 def _katex_urls(use_server=True):
     """Return (css_href, js_href) from local package assets only."""
-    css_path, js_path = _katex_local_paths()
-    if not css_path or not js_path:
+    if not _katex_available():
         return None, None
     if use_server:
         return "/assets/katex/katex.min.css", "/assets/katex/katex.min.js"
-    return "file://" + css_path, "file://" + js_path
+    # Offline / file:// export: materialise KaTeX into the cache so the
+    # browser can resolve real disk paths (zip installs have no PACKAGE_ROOT dir).
+    root = pkg_assets.extract_katex()
+    if not root:
+        return None, None
+    css = os.path.join(root, "katex.min.css").replace("\\", "/")
+    js = os.path.join(root, "katex.min.js").replace("\\", "/")
+    return "file://" + css, "file://" + js
 
 
 def _katex_css_inlined():
     """Inline vendored KaTeX CSS for offline export (no network)."""
-    css_path, _ = _katex_local_paths()
-    if not css_path:
+    css = pkg_assets.read_text("assets/katex/katex.min.css")
+    if not css:
         return ""
-    try:
-        with open(css_path, "r", encoding="utf-8") as f:
-            css = f.read()
-    except Exception:
-        return ""
-    # Rewrite relative font URLs so they still resolve next to the CSS file
-    # when the stylesheet is inlined into a standalone HTML export.
-    fonts_dir = os.path.join(os.path.dirname(css_path), "fonts")
-    if os.path.isdir(fonts_dir):
-        # Keep url(fonts/...) — export HTML is typically opened near assets,
-        # or the user can use preview server. Prefer absolute file:// for fonts.
-        base = "file://" + fonts_dir.replace("\\", "/") + "/"
+    # Rewrite relative font URLs to absolute file:// paths under the extracted
+    # cache directory so standalone HTML export still finds the font files.
+    root = pkg_assets.extract_katex()
+    if root:
+        fonts_dir = os.path.join(root, "fonts").replace("\\", "/")
+        base = "file://" + fonts_dir + "/"
         css = css.replace("url(fonts/", "url(" + base)
         css = css.replace("url('fonts/", "url('" + base)
         css = css.replace('url("fonts/', 'url("' + base)
@@ -210,26 +194,27 @@ def build_preview_shell(
     )
 
     mermaid_tag = ""
-    mermaid_path = _mermaid_js_path()
-    if mermaid_path:
+    if _asset_exists("mermaid.min.js"):
         if use_server:
             mermaid_tag = '<script src="/assets/mermaid.min.js"></script>\n'
         else:
-            mermaid_tag = '<script src="file://%s"></script>\n' % mermaid_path.replace("\\", "/")
+            # Offline: inline so zip installs don't need a disk path.
+            src = _load_asset("mermaid.min.js")
+            if src:
+                mermaid_tag = "<script>%s</script>\n" % src
 
     echarts_tag = ""
-    echarts_path = _echarts_js_path()
-    if echarts_path:
+    if _asset_exists("echarts.min.js"):
         if use_server:
             echarts_tag = '<script src="/assets/echarts.min.js"></script>\n'
         else:
-            echarts_tag = '<script src="file://%s"></script>\n' % echarts_path.replace("\\", "/")
+            src = _load_asset("echarts.min.js")
+            if src:
+                echarts_tag = "<script>%s</script>\n" % src
 
     html2canvas_tag = ""
-    if use_server:
-        html2canvas_path = os.path.join(PACKAGE_ROOT, "assets", "html2canvas.min.js")
-        if os.path.isfile(html2canvas_path):
-            html2canvas_tag = '<script src="/assets/html2canvas.min.js"></script>\n'
+    if use_server and _asset_exists("html2canvas.min.js"):
+        html2canvas_tag = '<script src="/assets/html2canvas.min.js"></script>\n'
 
     meta_refresh = ""
     if not use_server:
@@ -320,22 +305,14 @@ def build_export_html(
             pass
 
     mermaid_tag = ""
-    mermaid_path = _mermaid_js_path()
-    if mermaid_path:
-        try:
-            with open(mermaid_path, "r", encoding="utf-8") as f:
-                mermaid_tag = "<script>%s</script>\n" % f.read()
-        except Exception:
-            mermaid_tag = '<script src="file://%s"></script>\n' % mermaid_path.replace("\\", "/")
+    mermaid_src = _load_asset("mermaid.min.js")
+    if mermaid_src:
+        mermaid_tag = "<script>%s</script>\n" % mermaid_src
 
     echarts_tag = ""
-    echarts_path = _echarts_js_path()
-    if echarts_path:
-        try:
-            with open(echarts_path, "r", encoding="utf-8") as f:
-                echarts_tag = "<script>%s</script>\n" % f.read()
-        except Exception:
-            echarts_tag = '<script src="file://%s"></script>\n' % echarts_path.replace("\\", "/")
+    echarts_src = _load_asset("echarts.min.js")
+    if echarts_src:
+        echarts_tag = "<script>%s</script>\n" % echarts_src
 
     toc_block = ""
     layout_class = "mdpp-layout mdpp-export"
