@@ -50,14 +50,15 @@ if ! git diff-index --quiet HEAD --; then
 fi
 
 REMOTE_URL=$(git remote get-url origin)
-# Support github.com and generic git@host:owner/repo.git / https://host/owner/repo.git
-OWNER_REPO=$(echo "$REMOTE_URL" | sed -E \
-    -e 's|.*github.com[:/]([^/]+/[^/.]+)(\.git)?$|\1|' \
-    -e 's|.*[:/]([^/]+)/([^/]+?)(\.git)?$|\1/\2|')
-# If both sed patterns left a full URL, fall back to path-style parse
-if echo "$OWNER_REPO" | grep -qE '[:@]'; then
-    OWNER_REPO=$(echo "$REMOTE_URL" | sed -E 's|.*[:/]([^/]+)/([^/]+?)(\.git)?$|\1/\2|')
-fi
+# Portable parse for git@host:owner/repo.git and https://host/owner/repo.git
+OWNER_REPO=$(python3 -c '
+import re, sys
+u = sys.argv[1].strip()
+m = re.search(r"[:/]([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?$", u)
+if not m:
+    sys.exit("cannot parse owner/repo from remote: " + u)
+print("%s/%s" % (m.group(1), m.group(2)))
+' "$REMOTE_URL")
 OWNER="${OWNER_REPO%%/*}"
 REPO_NAME="${OWNER_REPO##*/}"
 
