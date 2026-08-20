@@ -500,13 +500,15 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _serve_doc(self, rel):
+        """/doc/ URL 不携带频道信息,遍历各频道 doc_dir 定位存在的文件。"""
         with _STATE.lock:
-            doc_dir = _STATE.doc_dir
-        if not doc_dir:
-            self.send_error(404)
-            return
-        full = self._safe_join(doc_dir, rel)
-        self._serve_file(full)
+            doc_dirs = [ch.doc_dir for ch in _STATE.channels.values() if ch.doc_dir]
+        for doc_dir in doc_dirs:
+            full = self._safe_join(doc_dir, rel)
+            if full and os.path.isfile(full):
+                self._serve_file(full)
+                return
+        self.send_error(404)
 
     def _serve_package_asset(self, rel):
         """Serve files from package assets/ via sublime resources (zip-safe)."""
