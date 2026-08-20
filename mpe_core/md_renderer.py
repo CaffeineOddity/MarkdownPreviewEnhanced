@@ -261,13 +261,33 @@ def rewrite_link_hrefs(html, base_dir, mode="server"):
             return m.group(0)
         if s.startswith("?") or s.startswith("//"):
             return m.group(0)
-        # 与浏览器一致:相对服务器根解析,".." 被钳制在根
+        # 候选一:markdown 惯例,相对 md 文件目录解析(支持 ../..)
+        cand_file = None
+        if not s.startswith("/"):
+            cand_file = os.path.normpath(os.path.join(base_dir, s))
+        # 候选二:相对服务器根解析,".." 被钳制在根(页面位于根的旧行为)
         rel = posixpath.normpath("/" + s).lstrip("/")
+        cand_root = os.path.normpath(os.path.join(base_dir, rel)) if rel else None
+        # 优先取真实存在的目标
+        target = None
+        for cand in (cand_file, cand_root):
+            if cand and os.path.exists(cand):
+                target = cand
+                break
+        is_md_link = s.lower().endswith(".md")
+        if target is not None and os.path.isdir(target):
+            # 目录链接:定位其中的入口文档(SKILL/README/index)
+            for entry_name in ("SKILL.md", "README.md", "index.md"):
+                entry = os.path.join(target, entry_name)
+                if os.path.isfile(entry):
+                    target = entry
+                    is_md_link = True
+                    break
+        if is_md_link or (target is not None and os.path.isdir(target)):
+            path = target or cand_file or cand_root
+            return "%s/?file=%s%s" % (prefix, _quote(path, safe=""), suffix)
         if not rel:
             return m.group(0)
-        if rel.lower().endswith(".md"):
-            path = os.path.normpath(os.path.join(base_dir, rel))
-            return "%s/?file=%s%s" % (prefix, _quote(path, safe=""), suffix)
         return "%s/doc/%s%s" % (prefix, rel, suffix)
 
     html = _A_HREF_RE.sub(repl, html)
