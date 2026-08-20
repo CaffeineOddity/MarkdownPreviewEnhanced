@@ -14,9 +14,10 @@
     "server_port": 8765,
 
     // Stop the local server after this many seconds with no browser requests.
-    // Closing the preview tab (even without the Close command) frees the port.
-    // Set to 0 to disable idle auto-stop (Close command still stops the server).
-    "server_idle_seconds": 45,
+    // Default 0 = keep the server alive for the whole Sublime session so that
+    // /doc/ links opened from the preview keep working even after the preview
+    // tab is closed. The Close command and Sublime exit still stop the server.
+    "server_idle_seconds": 0,
 
     // Browser: auto | default | chrome | safari | firefox | edge | brave | opera
     "browser": "auto",

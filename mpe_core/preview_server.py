@@ -38,6 +38,8 @@ class PreviewState:
         self.export_settings = {}  # render settings dict
         # SSE push — one persistent connection, server pushes on content change
         self.sse_queues = []  # list of queue.Queue
+        # 浏览器点击 .md 链接 -> 插件按标准预览流程打开该文件
+        self.pending_open_docs = []  # list of absolute .md paths
 
     def _notify_sse(self, event_type, payload_json):
         """Push an SSE event to all connected listeners. Caller must hold lock."""
@@ -52,6 +54,12 @@ class PreviewState:
 
 
 _STATE = PreviewState()
+
+
+def _escape(s):
+    """HTML 转义,用于错误页展示用户输入的路径。"""
+    import html as _html
+    return _html.escape(s or "", quote=True)
 
 
 def state():
@@ -121,6 +129,21 @@ def set_output_dir(path):
         _STATE.output_dir = path
 
 
+def queue_open_doc(path):
+    """Queue an absolute .md path for the plugin to open as a standard preview."""
+    with _STATE.lock:
+        if path not in _STATE.pending_open_docs:
+            _STATE.pending_open_docs.append(path)
+
+
+def pop_open_docs():
+    """Return and clear queued .md open requests from the browser."""
+    with _STATE.lock:
+        docs = list(_STATE.pending_open_docs)
+        _STATE.pending_open_docs = []
+        return docs
+
+
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         # Silence default stderr spam; plugin has its own logger.
@@ -144,6 +167,9 @@ class _Handler(BaseHTTPRequestHandler):
         path = parsed.path
 
         if path in ("/", "/preview.html", "/index.html"):
+            if not self._queue_doc_from_query(parsed.query):
+                self._serve_query_error(parsed.query)
+                return
             self._serve_shell()
             return
         if path == "/api/export/html":
@@ -183,6 +209,62 @@ class _Handler(BaseHTTPRequestHandler):
             self.wfile.write(b'{"ok":true}')
             return
         self.send_error(404)
+
+    def _queue_doc_from_query(self, query):
+        """支持 /?file:///abs/path.md 直接以标准预览流程打开任意 markdown。
+
+        目标文件入队后正常返回 shell 页,SSE 会把渲染结果推进该页面。
+        返回 False 表示 query 为空(正常预览)或目标不合法(调用方报错)。
+        """
+        q = unquote(query or "").strip()
+        if not q:
+            return True
+        for prefix in ("file://", "file="):
+            if q.startswith(prefix):
+                q = q[len(prefix):]
+                break
+        if q.startswith("file://"):
+            q = q[len("file://"):]
+        if not os.path.isabs(q):
+            return False
+        if not q.lower().endswith(".md"):
+            return False
+        if not os.path.isfile(q):
+            return False
+        queue_open_doc(q)
+        return True
+
+    def _serve_query_error(self, query):
+        """目标文件不合法时返回显式错误页,而不是静默显示上一个文档。"""
+        q = unquote(query or "").strip()
+        if q.startswith("file://"):
+            q = q[len("file://"):]
+        elif q.startswith("file="):
+            q = q[len("file="):]
+        if os.path.isdir(q):
+            reason = "是一个目录,请指向具体的 .md 文件"
+        elif not q.lower().endswith(".md"):
+            reason = "不是 .md 文件"
+        elif not os.path.exists(q):
+            reason = "文件不存在"
+        else:
+            reason = "不是常规文件"
+        html = (
+            "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
+            "<title>预览失败</title></head>"
+            "<body style=\"font-family:sans-serif;color:#333;padding:40px\">"
+            "<h2>无法预览</h2>"
+            "<p><code>%s</code> %s。</p>"
+            "<p>用法:<code>http://127.0.0.1:%d/?file:///abs/path/to/doc.md</code></p>"
+            "</body></html>"
+        ) % (_escape(q), reason, self.server.server_address[1])
+        data = html.encode("utf-8")
+        self.send_response(400)
+        self._cors()
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def _serve_shell(self):
         with _STATE.lock:
@@ -335,6 +417,7 @@ class _Handler(BaseHTTPRequestHandler):
                 ".gif": "image/gif",
                 ".webp": "image/webp",
                 ".json": "application/json",
+                ".md": "text/markdown; charset=utf-8",
             }.get(ext, "application/octet-stream")
         self.send_response(200)
         self._cors()
