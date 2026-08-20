@@ -30,6 +30,7 @@ from .mpe_core.preview_server import (
     pop_browser_line,
     seconds_since_activity,
     pop_open_docs,
+    has_sse_clients,
     set_editor_line,
     set_output_dir,
     update_content,
@@ -43,6 +44,8 @@ _browser = BrowserSession()
 _bound_view_id = None
 _last_browser_seq = 0
 _scroll_timer = None
+# 最近一次打开浏览器标签的时间;SSE 连接有建立延迟,宽限期内不判死
+_last_browser_open = 0.0
 # 浏览器链接点击后等待 on_load_async 渲染的文件
 _pending_link_opens = set()
 
@@ -117,6 +120,13 @@ def _preview_alive():
         _log("preview flag was set but server is down; treating as closed")
         _preview_open = False
         return False
+    # 服务器常驻后,"服务器在跑"不再代表页面开着;以 SSE 连接为准。
+    # 标签刚打开时 SSE 尚未连上,给 3 秒宽限期避免误判重复开标签。
+    if config.get("use_local_server", True) and not has_sse_clients():
+        if time.time() - _last_browser_open > 3:
+            _log("no preview page connected via SSE; treating preview as closed")
+            _preview_open = False
+            return False
     return True
 
 
@@ -245,6 +255,8 @@ def _publish(result, view, force_open=False):
         file_path = view.file_name() if view is not None else None
         url = _preview_url(file_path)
         import webbrowser as _wb
+        global _last_browser_open
+        _last_browser_open = time.time()
         _wb.open(url)
         _preview_open = True
         if view is not None:
