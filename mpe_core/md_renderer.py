@@ -95,6 +95,10 @@ _ATX_HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$")
 # HTML img src rewriter
 _IMG_SRC_RE = re.compile(r'(<img\b[^>]*?\bsrc=["\'])([^"\']+)(["\'])', re.IGNORECASE)
 
+# HTML a href rewriter
+_A_HREF_RE = re.compile(r'(<a\b[^>]*?\bhref=["\'])([^"\']+)(["\'])', re.IGNORECASE)
+_A_TAG_RE = re.compile(r"<a\b[^>]*>", re.IGNORECASE)
+
 # Task list items produced by markdown as plain text inside <li>
 _TASK_OPEN_RE = re.compile(
     r"(<li>)(\s*)\[ \]\s+",
@@ -226,6 +230,56 @@ def rewrite_image_srcs(html, base_dir, mode="server"):
         return "%sfile://%s%s" % (prefix, path, suffix)
 
     return _IMG_SRC_RE.sub(repl, html)
+
+
+def rewrite_link_hrefs(html, base_dir, mode="server"):
+    """Rewrite relative <a href> links for the local preview server.
+
+    The preview page lives at the server root, so the browser resolves
+    relative hrefs against doc_dir (leading "../" is clamped to root) - e.g.
+    "../superpowers/x.md" reaches "/doc/superpowers/x.md". Compute the same
+    resolution here and emit an explicit URL.
+
+    .md links become "/?file=<abs path>" so the browser tab URL reflects the
+    document and the server queues it for the standard preview flow. Other
+    relative links become /doc/ paths.
+
+    Also make every non-anchor link open in a new tab.
+    """
+    import posixpath
+    from urllib.parse import quote as _quote
+
+    if not base_dir or mode != "server":
+        return html
+
+    def repl(m):
+        prefix, href, suffix = m.group(1), m.group(2), m.group(3)
+        s = href.strip()
+        # 页内锚点与特殊协议不改写
+        if s.startswith(("#", "mailto:", "javascript:", "http://", "https://",
+                         "data:", "file://", "/doc/", "/?file=")):
+            return m.group(0)
+        if s.startswith("?") or s.startswith("//"):
+            return m.group(0)
+        # 与浏览器一致:相对服务器根解析,".." 被钳制在根
+        rel = posixpath.normpath("/" + s).lstrip("/")
+        if not rel:
+            return m.group(0)
+        if rel.lower().endswith(".md"):
+            path = os.path.normpath(os.path.join(base_dir, rel))
+            return "%s/?file=%s%s" % (prefix, _quote(path, safe=""), suffix)
+        return "%s/doc/%s%s" % (prefix, rel, suffix)
+
+    html = _A_HREF_RE.sub(repl, html)
+
+    # 所有非锚点链接新标签打开;已有 target 的不重复添加
+    def add_target(m):
+        tag = m.group(0)
+        if 'href="#' in tag or "target=" in tag:
+            return tag
+        return tag[:2] + ' target="_blank"' + tag[2:]
+
+    return _A_TAG_RE.sub(add_target, html)
 
 
 def content_hash(html):
@@ -488,6 +542,7 @@ def render(
 
     html = _inject_heading_lines(html, heading_lines)
     html = rewrite_image_srcs(html, base_dir, mode=image_mode)
+    html = rewrite_link_hrefs(html, base_dir, mode=image_mode)
 
     if not enable_toc:
         toc_html = ""

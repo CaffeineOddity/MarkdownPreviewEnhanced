@@ -29,6 +29,7 @@ from .mpe_core.preview_server import (
     close_browser_tabs,
     pop_browser_line,
     seconds_since_activity,
+    pop_open_docs,
     set_editor_line,
     set_output_dir,
     update_content,
@@ -42,6 +43,8 @@ _browser = BrowserSession()
 _bound_view_id = None
 _last_browser_seq = 0
 _scroll_timer = None
+# 浏览器链接点击后等待 on_load_async 渲染的文件
+_pending_link_opens = set()
 
 
 # ── logging ─────────────────────────────────────────────────────────────────
@@ -92,11 +95,15 @@ def _ensure_server():
     return url
 
 
-def _preview_url():
+def _preview_url(file_path=None):
     if config.get("use_local_server", True):
         if not SERVER.running:
             _ensure_server()
         if SERVER.running:
+            # URL 体现当前文档:?file=/abs/path.md,可直接收藏/重开
+            if file_path:
+                from urllib.parse import quote as _quote
+                return SERVER.base_url + "/?file=" + _quote(file_path, safe="")
             return SERVER.base_url + "/"
     return "file://" + config.preview_path()
 
@@ -235,7 +242,8 @@ def _publish(result, view, force_open=False):
     _write_files(shell, body)
 
     if force_open or not _preview_open:
-        url = _preview_url()
+        file_path = view.file_name() if view is not None else None
+        url = _preview_url(file_path)
         import webbrowser as _wb
         _wb.open(url)
         _preview_open = True
@@ -245,12 +253,27 @@ def _publish(result, view, force_open=False):
         _start_scroll_poller()
 
 
+def _open_doc_from_browser(path):
+    """Open a .md file clicked in the browser and preview it the standard way."""
+    window = sublime.active_window()
+    # 已在编辑器中打开则直接复用该 view
+    for v in window.views():
+        if v.file_name() == path:
+            window.focus_view(v)
+            MarkdownPreviewEnhancedListener.render_view(v, force=True, open_browser=True)
+            return
+    # 否则打开文件,等 on_load_async 再渲染
+    _pending_link_opens.add(path)
+    window.open_file(path)
+
+
 def _start_scroll_poller():
-    """Background tick: scroll-sync + idle server shutdown.
+    """Background tick: scroll-sync + optional idle server shutdown.
 
     Browser JS polls every ~400ms while the tab is open. If the user closes the
     tab/window without using the plugin command, requests stop and we free the
-    port after ``server_idle_seconds``.
+    port after ``server_idle_seconds`` (default 0 = keep server alive for the
+    Sublime session so /doc/ links keep working).
     """
     global _scroll_timer
     if not config.get("use_local_server", True):
@@ -265,7 +288,9 @@ def _start_scroll_poller():
             return
 
         # Auto-stop server when browser tab is gone (no HTTP activity).
-        idle_limit = float(config.get("server_idle_seconds", 45) or 0)
+        # Default 0 = server stays up for the Sublime session so /doc/ links
+        # keep working after the preview tab is closed.
+        idle_limit = float(config.get("server_idle_seconds", 0) or 0)
         if idle_limit > 0 and SERVER.running:
             try:
                 idle = seconds_since_activity()
@@ -289,6 +314,19 @@ def _start_scroll_poller():
                     sublime.set_timeout(lambda: _scroll_editor_to_line(line), 0)
             except Exception:
                 pass
+
+        # 浏览器里点击 .md 链接 -> 以标准预览流程打开该文件
+        # (sublime API 仅限主线程,tick 是后台线程,必须 set_timeout 切换)
+        try:
+            docs = pop_open_docs()
+            if docs:
+                for path in docs:
+                    _log("open doc from browser link: %s" % path)
+                sublime.set_timeout(
+                    lambda: [_open_doc_from_browser(p) for p in docs], 0
+                )
+        except Exception:
+            pass
 
         if _preview_open:
             _scroll_timer = threading.Timer(0.5, _tick)
@@ -470,6 +508,13 @@ class MarkdownPreviewEnhancedExportPdfCommand(sublime_plugin.WindowCommand):
 class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
     _timers = {}
 
+    def on_load_async(self, view):
+        """浏览器链接点击触发的文件加载完成后,走标准预览流程。"""
+        fn = view.file_name()
+        if fn and fn in _pending_link_opens:
+            _pending_link_opens.discard(fn)
+            MarkdownPreviewEnhancedListener.render_view(view, force=True, open_browser=True)
+
     @classmethod
     def render_view(cls, view, force=False, open_browser=False):
         global _preview_open
@@ -514,7 +559,9 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
 
             def _show_loading():
                 try:
-                    _publish(loading_result, view, force_open=True)
+                    # 只在预览不存活时开浏览器标签;否则会与 /?file= 的
+                    # 排队反馈形成循环,不断打开新标签
+                    _publish(loading_result, view, force_open=not _preview_alive())
                 except Exception:
                     _log("loading publish failed:\n%s" % traceback.format_exc())
 
