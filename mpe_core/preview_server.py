@@ -2,6 +2,7 @@
 import json
 import os
 import queue
+import sys
 import threading
 import time
 import traceback
@@ -15,6 +16,15 @@ from . import assets as pkg_assets
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     """Threaded HTTP server — Python 3.3+ compatible (ST3/ST4 safe)."""
     daemon_threads = True
+
+
+    def handle_error(self, request, client_address):
+        # 浏览器关闭标签/刷新页面时 SSE 连接被重置,属于正常噪音
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, ConnectionAbortedError,
+                            BrokenPipeError)):
+            return
+        HTTPServer.handle_error(self, request, client_address)
 
 
 class PreviewState:
@@ -142,6 +152,12 @@ def pop_open_docs():
         docs = list(_STATE.pending_open_docs)
         _STATE.pending_open_docs = []
         return docs
+
+
+def has_sse_clients():
+    """True if at least one preview page holds an SSE connection open."""
+    with _STATE.lock:
+        return bool(_STATE.sse_queues)
 
 
 class _Handler(BaseHTTPRequestHandler):
