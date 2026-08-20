@@ -126,8 +126,16 @@ body {
   text-decoration: underline;
 }
 
+/* Scrollspy:当前 section 对应的 TOC 项 — 加粗变黑,便于一眼定位 */
+/* 需要 !important 盖过 .mdpp-toc > .toc > ul > li > a 的层级样式 */
+.mdpp-toc .toc a.mdpp-toc-active {
+  color: #000 !important;
+  font-weight: 700 !important;
+  background: rgba(127, 127, 127, 0.12);
+}
+
 .mdpp-toc .toctitle {
-  display: block;
+  display: none;  /* 隐藏 TOC 顶部文档名标题 */
   font-weight: 700;
   color: var(--mdpp-fg);
   margin-bottom: 10px;

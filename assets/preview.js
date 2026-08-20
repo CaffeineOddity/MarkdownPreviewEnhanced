@@ -65,6 +65,8 @@
       mermaid.run().catch(function (e) { console.warn("[MDPP] mermaid run error", e); });
     }
     bindTocClicks();
+    tocActiveId = null;
+    updateTocActive();
   }
 
   // ── SSE connection ────────────────────────────────────────────────────
@@ -130,6 +132,41 @@
     };
   }
 
+  // ── TOC scrollspy:滚动时高亮当前 section ─────────────────────────────
+
+  var tocActiveId = null;
+
+  function updateTocActive() {
+    var toc = $("mdpp-toc");
+    if (!toc) return;
+    // 找视口顶部所在 section:最后一个 top <= 阈值的标题
+    var headings = document.querySelectorAll("#mdpp-content h1[id], #mdpp-content h2[id], #mdpp-content h3[id], #mdpp-content h4[id], #mdpp-content h5[id], #mdpp-content h6[id]");
+    var currentId = null;
+    for (var i = 0; i < headings.length; i++) {
+      if (headings[i].getBoundingClientRect().top <= 100) {
+        currentId = headings[i].id;
+      } else {
+        break;
+      }
+    }
+    if (currentId === tocActiveId) return;
+    tocActiveId = currentId;
+    var links = toc.querySelectorAll("a[href^='#']");
+    var activeLink = null;
+    for (var j = 0; j < links.length; j++) {
+      var link = links[j];
+      var isActive = currentId !== null &&
+        decodeURIComponent(link.getAttribute("href").slice(1)) === currentId;
+      link.classList.toggle("mdpp-toc-active", isActive);
+      if (isActive) activeLink = link;
+    }
+    // TOC 跟随滚动,保持当前项可见
+    if (activeLink && toc.scrollHeight > toc.clientHeight) {
+      var top = activeLink.offsetTop - toc.clientHeight / 2;
+      toc.scrollTop = Math.max(0, top);
+    }
+  }
+
   // ── scroll sync (browser → editor) ───────────────────────────────────
 
   function findNearestLine() {
@@ -180,6 +217,7 @@
 
   function onScroll() {
     saveScroll();
+    updateTocActive();
     if (cfg.scrollSync) {
       if (onScroll._t) clearTimeout(onScroll._t);
       onScroll._t = setTimeout(reportBrowserScroll, 150);
@@ -269,6 +307,7 @@
     restoreScroll();
     callRenderMath();
     bindTocClicks();
+    updateTocActive();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("beforeunload", saveScroll);
 
