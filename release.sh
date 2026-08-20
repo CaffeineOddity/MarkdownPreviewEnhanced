@@ -1,11 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
-# release.sh - tag a release & open/update the Package Control channel PR.
+# release.sh - tag a release and publish to Package Control.
+#
+# The channel entry for this package already exists with "tags": true, so
+# Package Control auto-picks up each new tag pushed to origin - no channel PR
+# is needed for ordinary releases. Pass --channel-pr only when adding the
+# package for the first time or changing its channel entry; that targets the
+# real GitHub channel sublimehq/package_control_channel.
 #
 # Usage:
-#   ./release.sh <version>          e.g.  ./release.sh 0.1.0
-#   ./release.sh <version> --dry-run
+#   ./release.sh <version>              tag + push origin (published)
+#   ./release.sh <version> --dry-run    preview, nothing pushed
+#   ./release.sh <version> --channel-pr also open/update the GitHub channel PR
 #
 # Channel entry is minimal (details + releases only). GitHub metadata supplies
 # homepage / author / readme / issues. The channel file is updated surgically
@@ -18,12 +25,20 @@ NC='\033[0m'
 
 VERSION="${1:-}"
 DRY_RUN=false
-if [ $# -ge 2 ] && [ "$2" = "--dry-run" ]; then
-    DRY_RUN=true
-fi
+DO_CHANNEL=false
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run) DRY_RUN=true ;;
+        --channel-pr) DO_CHANNEL=true ;;
+        -h|--help)
+            sed -n '4,10p' "$0" | sed 's/^# \?//'
+            exit 0
+            ;;
+    esac
+done
 
 if [ -z "$VERSION" ]; then
-    echo -e "${RED}Usage: $0 <version> [--dry-run]${NC}"
+    echo -e "${RED}Usage: $0 <version> [--dry-run] [--channel-pr]${NC}"
     exit 1
 fi
 
@@ -96,8 +111,15 @@ else
     echo -e "${GREEN}  Pushed master + tag $VERSION${NC}"
 fi
 
+# ── 可选:首次上架 / 修改频道入口时,向 GitHub 官方频道提交 PR ──────────────
+# 日常发版不需要(入口已是 tags:true,推 tag 即生效),仅 --channel-pr 时执行。
+if $DO_CHANNEL; then :; else
+    echo -e "${YELLOW}  跳过频道 PR(日常发版无需;首次上架请加 --channel-pr)${NC}"
+fi
 CHANNEL_REPO="sublimehq/package_control_channel"
 CHANNEL_DIR="/tmp/package_control_channel_$$"
+
+if $DO_CHANNEL; then
 
 echo
 echo -e "${YELLOW}[2/4] Forking $CHANNEL_REPO${NC}"
@@ -205,24 +227,9 @@ else
     if git diff-index --quiet HEAD --; then
         echo -e "${YELLOW}  No changes to repository/m.json - skipping PR.${NC}"
     else
-        git commit -m "Update MarkdownPreviewEnhanced package entry"
-
-        git push -f origin "$BRANCH_NAME"
-
-        EXISTING_PR=$(gh pr list \
-            --repo "$CHANNEL_REPO" \
-            --head "$OWNER:$BRANCH_NAME" \
-            --state open \
-            --json number \
-            --jq '.[0].number' 2>/dev/null || echo "")
-
-        if [ -n "$EXISTING_PR" ]; then
-            echo -e "${GREEN}  PR #$EXISTING_PR already exists - updated branch.${NC}"
-            echo -e "${GREEN}  PR URL: https://github.com/$CHANNEL_REPO/pull/$EXISTING_PR${NC}"
-        else
-            # PR body 严格遵循 package_control_channel 的 PR 模板(含勾选框),否则不予评审。
-            BODY_FILE="$CHANNEL_DIR/.pr_body.md"
-            cat > "$BODY_FILE" <<BODYEOF
+        # PR body 严格遵循 package_control_channel 的 PR 模板(含勾选框),否则不予评审。
+        BODY_FILE="$CHANNEL_DIR/.pr_body.md"
+        cat > "$BODY_FILE" <<BODYEOF
 - [x] I'm the package's author and/or maintainer.
 - [x] I have read [the docs](https://docs.sublimetext.io/guide/package-control/submitting.html).
 - [x] I have tagged a release with a [semver](https://semver.org) version number.
@@ -243,6 +250,21 @@ Live markdown preview in an external browser with full HTML/CSS, tables, Mermaid
 
 My package is similar to MarkdownPreview and MarkdownLivePreview. However it should still be added because it renders in an external browser with full HTML/CSS support and rich diagram/math libraries (Mermaid, KaTeX, ECharts), none of which the existing packages provide.
 BODYEOF
+
+        git commit -m "Update MarkdownPreviewEnhanced package entry"
+        git push -f origin "$BRANCH_NAME"
+
+        EXISTING_PR=$(gh pr list \
+            --repo "$CHANNEL_REPO" \
+            --head "$OWNER:$BRANCH_NAME" \
+            --state open \
+            --json number \
+            --jq '.[0].number' 2>/dev/null || echo "")
+
+        if [ -n "$EXISTING_PR" ]; then
+            echo -e "${GREEN}  PR #$EXISTING_PR already exists - updated branch.${NC}"
+            echo -e "${GREEN}  PR URL: https://github.com/$CHANNEL_REPO/pull/$EXISTING_PR${NC}"
+        else
             PR_URL=$(gh pr create \
                 --repo "$CHANNEL_REPO" \
                 --head "$OWNER:$BRANCH_NAME" \
@@ -253,6 +275,8 @@ BODYEOF
         fi
     fi
 fi
+
+fi  # end DO_CHANNEL
 
 echo
 echo -e "${GREEN}=== Release v$VERSION complete! ===${NC}"
