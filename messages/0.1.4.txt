@@ -1,0 +1,4 @@
+MarkdownPreviewEnhanced 0.1.4
+=============================
+
+- feat: release.sh auto-generates messages/<version>.txt changelog
