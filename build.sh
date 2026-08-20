@@ -94,7 +94,7 @@ should_exclude() {
         .python-version) return 0 ;;
         build.sh|release.sh|st_package_reviewer.sh|AGENTS.md|README.md|LICENSE) return 0 ;;
         docs|docs/*|img|img/*|dist|dist/*) return 0 ;;
-        *.sublime-project|*.sublime-workspace|*.sublime-keymap.example) return 0 ;;
+        *.sublime-project|*.sublime-workspace) return 0 ;;
         repository.json|repository.json.example) return 0 ;;
         .gitcafe/*|.gitcafe) return 0 ;;
     esac
@@ -105,6 +105,9 @@ REQUIRED_FILES=(
     "MarkdownPreviewEnhanced.py"
     "MarkdownPreviewEnhanced.sublime-settings"
     "Default.sublime-commands"
+    "Default (OSX).sublime-keymap"
+    "Default (Windows).sublime-keymap"
+    "Default (Linux).sublime-keymap"
     "Main.sublime-menu"
     "messages.json"
     "mpe_core/__init__.py"
