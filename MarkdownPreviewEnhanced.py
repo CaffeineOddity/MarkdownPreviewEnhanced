@@ -27,9 +27,9 @@ from .mpe_core.md_renderer import render as render_markdown, set_debug_log_path
 from .mpe_core.preview_server import (
     SERVER,
     close_browser_tabs,
-    pop_browser_line,
     seconds_since_activity,
     pop_open_docs,
+    pop_browser_lines,
     has_sse_clients,
     set_editor_line,
     set_output_dir,
@@ -42,7 +42,8 @@ _MARKDOWN_SCOPE = "text.html.markdown"
 _preview_open = False
 _browser = BrowserSession()
 _bound_view_id = None
-_last_browser_seq = 0
+_last_browser_seqs = {}  # 频道 -> 已处理的 browser_line 序号
+_bound_views = {}  # 频道(文档路径) -> view.id()
 _scroll_timer = None
 # 最近一次打开浏览器标签的时间;SSE 连接有建立延迟,宽限期内不判死
 _last_browser_open = 0.0
@@ -231,6 +232,9 @@ def _publish(result, view, force_open=False):
 
     if use_server:
         _ensure_server()
+        channel_key = view.file_name() if view is not None else None
+        if view is not None:
+            _bound_views[channel_key or ""] = view.id()
         update_content(
             body_html=body,
             toc_html=toc,
@@ -247,6 +251,7 @@ def _publish(result, view, force_open=False):
                 "custom_css": custom_css,
                 "title": title,
             },
+            file_path=channel_key,
         )
 
     _write_files(shell, body)
@@ -320,10 +325,13 @@ def _start_scroll_poller():
 
         if config.get("scroll_sync", True):
             try:
-                line, seq = pop_browser_line()
-                if seq > _last_browser_seq and line > 0:
-                    _last_browser_seq = seq
-                    sublime.set_timeout(lambda: _scroll_editor_to_line(line), 0)
+                for channel_key, line, seq in pop_browser_lines():
+                    if seq > _last_browser_seqs.get(channel_key, 0) and line > 0:
+                        _last_browser_seqs[channel_key] = seq
+                        view_id = _bound_views.get(channel_key)
+                        sublime.set_timeout(
+                            lambda l=line, v=view_id: _scroll_editor_to_line(l, v), 0
+                        )
             except Exception:
                 pass
 
@@ -350,18 +358,19 @@ def _start_scroll_poller():
     _scroll_timer.start()
 
 
-def _scroll_editor_to_line(line):
+def _scroll_editor_to_line(line, view_id=None):
     """Scroll the bound (or active) markdown view to 1-based line."""
     global _bound_view_id
+    target_id = view_id or _bound_view_id
     view = None
     for w in sublime.windows():
         for v in w.views():
-            if _bound_view_id and v.id() == _bound_view_id:
+            if target_id and v.id() == target_id:
                 view = v
                 break
             if view is None and v.match_selector(0, _MARKDOWN_SCOPE):
                 view = v
-        if view and _bound_view_id and view.id() == _bound_view_id:
+        if view and target_id and view.id() == target_id:
             break
     if view is None:
         return
@@ -655,7 +664,7 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
             if not sel:
                 return
             row, _col = view.rowcol(sel[0].begin())
-            set_editor_line(row + 1)
+            set_editor_line(row + 1, file_path=view.file_name())
         except Exception:
             pass
 
