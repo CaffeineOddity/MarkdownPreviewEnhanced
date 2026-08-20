@@ -3,6 +3,13 @@
   "use strict";
 
   var cfg = window.MDPP_CONFIG || { mode: "file", scrollSync: true, showToc: true };
+
+  // 频道标识:地址栏 ?file= 参数,决定 SSE/滚动上报归属哪个文档
+  var channelFile = "";
+  try {
+    channelFile = new URLSearchParams(window.location.search).get("file") || "";
+  } catch (err) {}
+  var channelQuery = channelFile ? "?file=" + encodeURIComponent(channelFile) : "";
   var scrollKey = "mdpp-scroll-y";
   var lastReportedLine = 0;
   var lastEditorLine = 0;
@@ -66,7 +73,7 @@
     if (es) { es.close(); es = null; }
     if (cfg.mode !== "server") return;
 
-    es = new EventSource("/api/stream");
+    es = new EventSource("/api/stream" + channelQuery);
 
     es.addEventListener("content", function (e) {
       try {
@@ -150,7 +157,7 @@
     fetch("/api/browser_scroll", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ line: line }),
+      body: JSON.stringify({ line: line, file: channelFile }),
     }).catch(function () {});
   }
 
@@ -235,7 +242,7 @@
 
   window.mdppExportHtml = function mdppExportHtml() {
     setExportLoading("mdpp-export-html", true);
-    fetch("/api/export/html")
+    fetch("/api/export/html" + channelQuery)
       .then(function (r) {
         if (!r.ok) return r.json().then(function (e) { throw new Error(e.error || "export failed"); });
         return r.blob();

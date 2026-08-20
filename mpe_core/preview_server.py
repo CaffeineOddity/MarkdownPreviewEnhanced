@@ -27,32 +27,27 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
         HTTPServer.handle_error(self, request, client_address)
 
 
-class PreviewState:
-    """Shared mutable state between the plugin and the HTTP server."""
+class DocChannel:
+    """单个文档的预览状态与 SSE 频道(按文档路径分频道,互不干扰)。"""
 
     def __init__(self):
-        self.lock = threading.Lock()
         self.body_html = ""
         self.toc_html = ""
         self.full_html = ""
-        self.doc_dir = None  # directory of the current markdown file
-        self.editor_line = 0  # cursor line in editor (1-based) → browser
-        self.browser_line = 0  # visible line reported by browser → editor
+        self.doc_dir = None  # directory of the markdown file
+        self.editor_line = 0  # cursor line in editor (1-based) -> browser
+        self.browser_line = 0  # visible line reported by browser -> editor
         self.browser_line_seq = 0
-        self.output_dir = None
-        self.shell_html = ""  # complete HTML page; served at /
-        self.last_activity = 0.0  # unix time of last HTTP request
+        self.shell_html = ""  # complete HTML page; served at /?file=<path>
         # For server-side export (PDF/PNG/HTML)
         self.raw_markdown = ""
         self.export_base_dir = None
         self.export_settings = {}  # render settings dict
-        # SSE push — one persistent connection, server pushes on content change
+        # SSE push - pages of this document hold persistent connections
         self.sse_queues = []  # list of queue.Queue
-        # 浏览器点击 .md 链接 -> 插件按标准预览流程打开该文件
-        self.pending_open_docs = []  # list of absolute .md paths
 
     def _notify_sse(self, event_type, payload_json):
-        """Push an SSE event to all connected listeners. Caller must hold lock."""
+        """Push an SSE event to listeners of this channel. Caller holds lock."""
         dead = []
         for q in self.sse_queues:
             try:
@@ -61,6 +56,28 @@ class PreviewState:
                 dead.append(q)
         for q in dead:
             self.sse_queues.remove(q)
+
+
+class PreviewState:
+    """Shared mutable state between the plugin and the HTTP server."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        # 文档路径 -> 频道;"" 为无文件名视图(未保存 buffer)的默认频道
+        self.channels = {"": DocChannel()}
+        self.output_dir = None
+        self.last_activity = 0.0  # unix time of last HTTP request
+        # 浏览器点击 .md 链接 -> 插件按标准预览流程打开该文件
+        self.pending_open_docs = []  # list of absolute .md paths
+
+    def channel(self, file_path):
+        """Return (creating if needed) the channel for *file_path*. Caller holds lock."""
+        key = file_path or ""
+        ch = self.channels.get(key)
+        if ch is None:
+            ch = DocChannel()
+            self.channels[key] = ch
+        return ch
 
 
 _STATE = PreviewState()
@@ -74,6 +91,20 @@ def _escape(s):
 
 def state():
     return _STATE
+
+
+def _file_key_from_query(query):
+    """从 query 提取频道标识:?file=<编码后的绝对路径>;无则返回 ""。"""
+    q = unquote(query or "").strip()
+    if not q:
+        return ""
+    for prefix in ("file://", "file="):
+        if q.startswith(prefix):
+            q = q[len(prefix):]
+            break
+    if q.startswith("file://"):
+        q = q[len("file://"):]
+    return q
 
 
 def touch_activity():
@@ -90,48 +121,56 @@ def seconds_since_activity():
 
 
 def update_content(body_html, toc_html, full_html, content_hash, doc_dir, shell_html=None,
-                   raw_markdown=None, export_base_dir=None, export_settings=None):
+                   raw_markdown=None, export_base_dir=None, export_settings=None,
+                   file_path=None):
+    """Update the channel of *file_path*(默认频道用于无文件名视图)。"""
     with _STATE.lock:
-        _STATE.body_html = body_html or ""
-        _STATE.toc_html = toc_html or ""
-        _STATE.full_html = full_html or ""
+        ch = _STATE.channel(file_path)
+        ch.body_html = body_html or ""
+        ch.toc_html = toc_html or ""
+        ch.full_html = full_html or ""
         if doc_dir:
-            _STATE.doc_dir = doc_dir
+            ch.doc_dir = doc_dir
         if shell_html is not None:
-            _STATE.shell_html = shell_html
+            ch.shell_html = shell_html
         if raw_markdown is not None:
-            _STATE.raw_markdown = raw_markdown
+            ch.raw_markdown = raw_markdown
         if export_base_dir is not None:
-            _STATE.export_base_dir = export_base_dir
+            ch.export_base_dir = export_base_dir
         if export_settings is not None:
-            _STATE.export_settings = export_settings
-        # Push to SSE listeners — browser updates DOM in-place, no reload
+            ch.export_settings = export_settings
+        # Push to SSE listeners - browser updates DOM in-place, no reload
         payload = json.dumps({
-            "html": _STATE.body_html,
-            "toc": _STATE.toc_html,
+            "html": ch.body_html,
+            "toc": ch.toc_html,
         }, ensure_ascii=False)
-        _STATE._notify_sse("content", payload)
+        ch._notify_sse("content", payload)
 
 
-def set_editor_line(line):
+def set_editor_line(line, file_path=None):
     with _STATE.lock:
-        _STATE.editor_line = int(line or 0)
-        payload = json.dumps({"line": _STATE.editor_line}, ensure_ascii=False)
-        _STATE._notify_sse("editorLine", payload)
+        ch = _STATE.channel(file_path)
+        ch.editor_line = int(line or 0)
+        payload = json.dumps({"line": ch.editor_line}, ensure_ascii=False)
+        ch._notify_sse("editorLine", payload)
 
 
-def pop_browser_line():
-    """Return (line, seq) if browser reported a new scroll target for the editor."""
+def pop_browser_lines():
+    """Return [(file_path, line, seq)] for channels with new browser scroll reports."""
     with _STATE.lock:
-        line = _STATE.browser_line
-        seq = _STATE.browser_line_seq
-        return line, seq
+        events = []
+        for key, ch in _STATE.channels.items():
+            if ch.browser_line:
+                events.append((key, ch.browser_line, ch.browser_line_seq))
+                ch.browser_line = 0
+        return events
 
 
 def close_browser_tabs():
-    """Push a 'close' event to all connected SSE listeners — each tab closes itself."""
+    """Push a 'close' event to all connected SSE listeners - each tab closes itself."""
     with _STATE.lock:
-        _STATE._notify_sse("close", "{}")
+        for ch in _STATE.channels.values():
+            ch._notify_sse("close", "{}")
 
 
 def set_output_dir(path):
@@ -157,7 +196,8 @@ def pop_open_docs():
 def has_sse_clients():
     """True if at least one preview page holds an SSE connection open."""
     with _STATE.lock:
-        return bool(_STATE.sse_queues)
+        return any(ch.sse_queues for ch in _STATE.channels.values())
+
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -183,16 +223,17 @@ class _Handler(BaseHTTPRequestHandler):
         path = parsed.path
 
         if path in ("/", "/preview.html", "/index.html"):
+            file_key = _file_key_from_query(parsed.query)
             if not self._queue_doc_from_query(parsed.query):
                 self._serve_query_error(parsed.query)
                 return
-            self._serve_shell()
+            self._serve_shell(file_key)
             return
         if path == "/api/export/html":
-            self._api_export_html()
+            self._api_export_html(parsed.query)
             return
         if path == "/api/stream":
-            self._api_stream()
+            self._api_stream(parsed.query)
             return
         if path.startswith("/doc/"):
             self._serve_doc(path[len("/doc/"):])
@@ -214,10 +255,12 @@ class _Handler(BaseHTTPRequestHandler):
             except Exception:
                 data = {}
             line = int(data.get("line") or 0)
+            file_key = data.get("file") or ""
             with _STATE.lock:
+                ch = _STATE.channel(file_key)
                 if line > 0:
-                    _STATE.browser_line = line
-                    _STATE.browser_line_seq += 1
+                    ch.browser_line = line
+                    ch.browser_line_seq += 1
             self.send_response(200)
             self._cors()
             self.send_header("Content-Type", "application/json")
@@ -282,9 +325,19 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _serve_shell(self):
+    def _serve_shell(self, file_key):
         with _STATE.lock:
-            html = _STATE.shell_html or _STATE.full_html or "<html><body>Loading…</body></html>"
+            ch = _STATE.channel(file_key)
+            html = ch.shell_html or ch.full_html
+        if not html:
+            # 频道尚未渲染(如 /?file= 直接访问):先给 loading 页,
+            # SSE 连上后由插件渲染推送正式内容
+            from .html_builder import build_preview_shell
+            html = build_preview_shell(
+                '<p style="color:#666;text-align:center;padding:40px">Rendering...</p>',
+                use_server=True,
+                title=os.path.basename(file_key or "preview"),
+            )
         data = html.encode("utf-8")
         self.send_response(200)
         self._cors()
@@ -293,15 +346,17 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _api_export_html(self):
+    def _api_export_html(self, query):
         """Generate clean standalone HTML (no toolbar, no polling) and return it."""
         from .html_builder import build_export_html
         from .md_renderer import render as render_markdown, rewrite_image_srcs
 
+        file_key = _file_key_from_query(query)
         with _STATE.lock:
-            raw = _STATE.raw_markdown
-            base_dir = _STATE.export_base_dir or _STATE.doc_dir
-            settings = dict(_STATE.export_settings)
+            ch = _STATE.channel(file_key)
+            raw = ch.raw_markdown
+            base_dir = ch.export_base_dir or ch.doc_dir
+            settings = dict(ch.export_settings)
         if not raw:
             self.send_error(400, "No markdown content available for export")
             return
@@ -351,17 +406,19 @@ class _Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(payload)
 
-    def _api_stream(self):
+    def _api_stream(self, query):
         """SSE endpoint — server pushes content/editor-line to browser in-place."""
+        file_key = _file_key_from_query(query)
         q = queue.Queue(maxsize=64)
         with _STATE.lock:
-            _STATE.sse_queues.append(q)
+            ch = _STATE.channel(file_key)
+            ch.sse_queues.append(q)
             # Send current snapshot on connect
             initial = json.dumps({
-                "html": _STATE.body_html,
-                "toc": _STATE.toc_html,
+                "html": ch.body_html,
+                "toc": ch.toc_html,
             }, ensure_ascii=False)
-            initial_line = json.dumps({"line": _STATE.editor_line}, ensure_ascii=False)
+            initial_line = json.dumps({"line": ch.editor_line}, ensure_ascii=False)
 
         try:
             self.send_response(200)
@@ -391,8 +448,8 @@ class _Handler(BaseHTTPRequestHandler):
             pass
         finally:
             with _STATE.lock:
-                if q in _STATE.sse_queues:
-                    _STATE.sse_queues.remove(q)
+                if q in ch.sse_queues:
+                    ch.sse_queues.remove(q)
 
     def _safe_join(self, root, rel):
         rel = unquote(rel).replace("\\", "/")
