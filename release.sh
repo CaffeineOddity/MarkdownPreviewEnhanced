@@ -84,6 +84,63 @@ echo "  owner: $OWNER"
 echo "  package: $PKG_NAME"
 echo
 
+echo -e "${YELLOW}[0/4] Generating changelog (messages/$VERSION.txt)${NC}"
+
+# 从上一 tag 到 HEAD 的提交自动生成 changelog,并登记进 messages.json,
+# 提交后随 tag 一起发布(Package Control 升级时展示给用户)。
+if $DRY_RUN; then
+    echo -e "${YELLOW}  [DRY-RUN] Would write messages/$VERSION.txt and commit${NC}"
+else
+    PREV_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
+    if [ -z "$PREV_TAG" ]; then
+        echo -e "${RED}  No previous tag found; cannot compute changelog range.${NC}"
+        exit 1
+    fi
+    if git ls-files --error-unmatch "messages/$VERSION.txt" >/dev/null 2>&1; then
+        echo -e "${YELLOW}  messages/$VERSION.txt already tracked - skipping.${NC}"
+    else
+        python3 - "$VERSION" "$PREV_TAG" <<'PYEOF'
+import re
+import subprocess
+import sys
+
+version, prev_tag = sys.argv[1], sys.argv[2]
+
+# 取 PREV_TAG..HEAD 的提交 subject
+out = subprocess.check_output(
+    ["git", "log", "--pretty=%s", "%s..HEAD" % prev_tag],
+    text=True, errors="replace")
+subjects = [l.strip() for l in out.splitlines() if l.strip()]
+
+header = "MarkdownPreviewEnhanced %s\n%s\n\n" % (version, "=" * len("MarkdownPreviewEnhanced %s" % version))
+if subjects:
+    body = "\n".join("- " + re.sub(r"\s+", " ", s) for s in subjects)
+else:
+    body = "- (no commit messages found)"
+text = header + body + "\n"
+with open("messages/%s.txt" % version, "w", encoding="utf-8") as f:
+    f.write(text)
+
+# 登记进 messages.json(保持 4 空格缩进)
+import json
+with open("messages.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
+data[version] = "messages/%s.txt" % version
+with open("messages.json", "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=4)
+    f.write("\n")
+print("  wrote messages/%s.txt + messages.json" % version)
+PYEOF
+        git add messages.json "messages/$VERSION.txt"
+        git commit -q -m "Add v$VERSION changelog" \
+            -m "Auto-generated from commits since $PREV_TAG." \
+            -m "" \
+            -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+        echo -e "${GREEN}  Committed changelog for $VERSION${NC}"
+    fi
+fi
+
+echo
 echo -e "${YELLOW}[1/4] Package Control zip verify & tagging${NC}"
 
 # Package Control installs a zip from the GitHub *tag* (``tags: true``), not
