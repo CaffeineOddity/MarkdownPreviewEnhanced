@@ -6,6 +6,17 @@ Browser live Markdown preview for Sublime Text 4. No extra installs.
 
 ![preview](./img/preview.png)
 
+## Features
+
+- Live preview in the browser (SSE, no reload, scroll kept)
+- GitHub-style HTML / CSS, syntax highlighting, GFM task lists, footnotes, YAML frontmatter
+- Mermaid, KaTeX, ECharts
+- TOC sidebar and editor ↔ preview scroll sync
+- Relative images (`./img/a.png`)
+- Export HTML, PNG, PDF
+- Custom CSS and favicon (bundled icon by default)
+- macOS / Windows / Linux; everything vendored, no extra installs
+
 ## Install
 
 Command Palette → `Package Control: Install Package` → `MarkdownPreviewEnhanced`
