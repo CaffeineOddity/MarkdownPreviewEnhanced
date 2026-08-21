@@ -44,5 +44,9 @@
     "scroll_sync": true,
 
     // Optional extra CSS file path (absolute or ~).
-    "custom_css": ""
+    "custom_css": "",
+
+    // Preview/export favicon. Empty = bundled icon; "none" = no icon;
+    // otherwise a local path (~ expanded) or http(s) URL.
+    "favicon": ""
 }

@@ -76,9 +76,9 @@ def _url_hint(url):
         return ""
     # Prefer host:port for http; path for file://
     if url.startswith("http://") or url.startswith("https://"):
-        # http://127.0.0.1:8765/ → 127.0.0.1:8765
-        rest = url.split("://", 1)[-1]
-        return rest.split("/", 1)[0]
+        # 保留 host:port 和 query,以便按文档区分标签
+        # http://127.0.0.1:8765/?file=/abs/a.md → 127.0.0.1:8765/?file=/abs/a.md
+        return url.split("://", 1)[-1]
     if url.startswith("file://"):
         return url.replace("file://", "")
     return url

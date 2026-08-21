@@ -99,17 +99,25 @@
       } catch (err) {}
     });
 
+    // EventSource 在 CONNECTING 时也会打 error.这里若 es.close(),
+    // 握手中的连接会被掐掉,之后 has_sse_clients 一直是 False,
+    // Toggle 每次都当死标签再开一页.
     es.onerror = function () {
+      if (!es) return;
+      if (es.readyState === EventSource.CONNECTING) return;
+      if (es.readyState === EventSource.OPEN) return;
       es.close();
       es = null;
       if (reconnectTimer) clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(connectStream, 2000);
     };
 
-    // Close on page unload
-    window.addEventListener("beforeunload", function () {
-      if (es) { es.close(); es = null; }
-    });
+    if (!connectStream._unloadBound) {
+      connectStream._unloadBound = true;
+      window.addEventListener("beforeunload", function () {
+        if (es) { es.close(); es = null; }
+      });
+    }
   }
 
   // ── TOC ──────────────────────────────────────────────────────────────

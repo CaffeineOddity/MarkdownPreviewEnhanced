@@ -2,9 +2,20 @@
 
 KaTeX and Mermaid are always served from vendored package assets — never from a CDN.
 """
+import base64
 import os
 
 from . import assets as pkg_assets
+
+_ICON_MIME = {
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".ico": "image/x-icon",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
 
 
 def _asset_exists(name):
@@ -147,6 +158,55 @@ window.mdppRenderMathSafe = function mdppRenderMathSafe() {
 """.strip()
 
 
+def _svg_data_uri(svg_text):
+    raw = (svg_text or "").encode("utf-8")
+    return "data:image/svg+xml;base64," + base64.b64encode(raw).decode("ascii")
+
+
+def _file_data_uri(path):
+    """把本地图标文件读成 data URI.文件不存在则返回空串."""
+    if not path or not os.path.isfile(path):
+        return "", ""
+    ext = os.path.splitext(path)[1].lower()
+    mime = _ICON_MIME.get(ext, "application/octet-stream")
+    with open(path, "rb") as f:
+        data = f.read()
+    href = "data:%s;base64,%s" % (mime, base64.b64encode(data).decode("ascii"))
+    return href, mime
+
+
+def _favicon_tag(favicon, use_server):
+    """生成 <link rel="icon">.空值用包内默认图标;`none` 禁用."""
+    raw = (favicon or "").strip()
+    if raw.lower() == "none":
+        return ""
+
+    href = ""
+    mime = ""
+    lowered = raw.lower()
+    if lowered.startswith("http://") or lowered.startswith("https://") or lowered.startswith("data:"):
+        href = raw
+    elif raw:
+        try:
+            href, mime = _file_data_uri(os.path.expanduser(raw))
+        except OSError:
+            return ""
+        if not href:
+            return ""
+    elif use_server:
+        href = "/assets/favicon.svg"
+        mime = "image/svg+xml"
+    else:
+        svg = _load_asset("favicon.svg")
+        if not svg:
+            return ""
+        href = _svg_data_uri(svg)
+        mime = "image/svg+xml"
+
+    type_attr = (' type="%s"' % mime) if mime else ""
+    return '  <link rel="icon" href="%s"%s>\n' % (_escape_html(href), type_attr)
+
+
 def build_preview_shell(
     body_html,
     toc_html="",
@@ -156,6 +216,7 @@ def build_preview_shell(
     use_server=True,
     custom_css="",
     title="Markdown Preview",
+    favicon="",
 ):
     """Build the stable shell page (polls /api/content when use_server)."""
     css = _load_asset("preview.css")
@@ -229,6 +290,7 @@ def build_preview_shell(
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
         "<title>%s</title>\n"
         "%s"
+        "%s"
         "<style>\n%s\n%s\n</style>\n"
         "<script>%s</script>\n"
         "</head>\n"
@@ -252,6 +314,7 @@ def build_preview_shell(
     ) % (
         meta_refresh,
         _escape_html(title),
+        _favicon_tag(favicon, use_server),
         _katex_head(enable_katex, use_server=use_server, inline_css=False),
         css,
         hl_css,
@@ -266,8 +329,9 @@ def build_preview_shell(
         _katex_rerender_snippet(enable_katex),
         js,
         "document.addEventListener('DOMContentLoaded',function(){"
-        "if(window.mermaid){mermaid.initialize({theme:'default'});mermaid.run();}"
         "if(window.mdppInit)mdppInit();"
+        "try{if(window.mermaid){mermaid.initialize({theme:'default'});mermaid.run();}}"
+        "catch(e){console.warn('[MDPP] mermaid init',e);}"
         "if(window.mdppRenderMathSafe)mdppRenderMathSafe();"
         "var _mdppRenderEcharts=function(){"
         "var el=document.querySelector('.mdpp-echarts:not([data-mdpp-rendered])');"
@@ -293,6 +357,7 @@ def build_export_html(
     enable_katex=True,
     custom_css="",
     title="Markdown Export",
+    favicon="",
 ):
     """Standalone HTML. KaTeX CSS is inlined from vendored assets (no CDN)."""
     css = _load_asset("preview.css")
@@ -330,6 +395,7 @@ def build_export_html(
         "<meta charset=\"utf-8\">\n"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
         "<title>%s</title>\n"
+        "%s"
         "%s"
         "<style>\n%s\n%s\n"
         "@media print { "
@@ -377,6 +443,7 @@ def build_export_html(
         "</html>\n"
     ) % (
         _escape_html(title),
+        _favicon_tag(favicon, False),
         _katex_head(enable_katex, use_server=False, inline_css=True),
         css,
         hl_css,

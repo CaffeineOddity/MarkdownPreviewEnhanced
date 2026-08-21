@@ -124,6 +124,7 @@ REQUIRED_FILES=(
     "assets/preview.css"
     "assets/highlight.css"
     "assets/preview.js"
+    "assets/favicon.svg"
     "assets/mermaid.min.js"
     "assets/echarts.min.js"
     "assets/html2canvas.min.js"
@@ -386,6 +387,30 @@ deploy_unpacked() {
             --exclude='*.sublime-keymap.example' \
             "${REPO_ROOT}/" "${ST_PACKAGES}/"
     fi
+    # Package Control 看到 installed_packages 里有同名包、但 unpacked
+    # 目录没有 package-metadata.json,就会在启动时 ignore → 重装 0.1.4 →
+    # plugin_unloaded 把刚拉起的预览服务器杀掉(日志里约 1.5s).
+    python3 - "$ST_PACKAGES/package-metadata.json" <<'PY'
+import json, sys, time
+path = sys.argv[1]
+meta = {
+    "name": "MarkdownPreviewEnhanced",
+    "version": "0.1.4",
+    "sublime_text": ">=4107",
+    "platforms": ["*"],
+    "python_version": "3.3",
+    "url": "https://github.com/CaffeineOddity/MarkdownPreviewEnhanced",
+    "description": "local --dev overlay (not a channel install)",
+    "install_time": time.time(),
+}
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(meta, f)
+print("  wrote", path)
+PY
+    if [ -f "$ST_INSTALLED" ]; then
+        rm -f "$ST_INSTALLED"
+        echo "  removed Installed Packages zip (unpacked overlay is the test install)"
+    fi
     echo "  done (unpacked)"
 }
 
@@ -403,14 +428,18 @@ install_zip() {
     fi
     cp -f "$ZIP_PATH" "$ST_INSTALLED"
     echo "  installed → ${ST_INSTALLED}"
-    echo "  ${YELLOW}Restart Sublime Text or run Package Control: Satisfy Dependencies / reload.${NC}"
+    echo "  ${YELLOW}Restart Sublime Text or reload the plugin.${NC}"
+    echo "  ${YELLOW}Warning: if Package Control lists ${PKG_NAME}, it may overwrite this zip with the channel release on startup. For local testing use: ./build.sh --dev${NC}"
 }
 
 # --- main ---
 case "$MODE" in
     dev)
+        package_zip
+        validate_zip_layout
         deploy_unpacked
-        # If a zip is also present, unpacked Packages/ wins over Installed Packages.
+        # unpacked Packages/ wins over Installed Packages zip (and over
+        # Package Control re-installing the channel release).
         if [ -f "$ST_INSTALLED" ]; then
             echo "${YELLOW}Note: unpacked Packages/ overrides Installed Packages zip.${NC}"
         fi
