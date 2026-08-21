@@ -22,6 +22,8 @@
 /.gitignore         export-ignore
 /AGENTS.md          export-ignore
 /README.md          export-ignore
+/README_zh.md       export-ignore
+/CONTRIBUTING.md    export-ignore
 /build.sh           export-ignore
 /release.sh         export-ignore
 /st_package_reviewer.sh export-ignore

@@ -92,7 +92,7 @@ should_exclude() {
         __pycache__/*|*/__pycache__/*|*.pyc|*.pyo) return 0 ;;
         .DS_Store|*/.DS_Store|.gitignore|.gitattributes) return 0 ;;
         .python-version) return 0 ;;
-        build.sh|release.sh|st_package_reviewer.sh|AGENTS.md|README.md|LICENSE) return 0 ;;
+        build.sh|release.sh|st_package_reviewer.sh|AGENTS.md|README.md|README_zh.md|CONTRIBUTING.md|LICENSE) return 0 ;;
         docs|docs/*|img|img/*|dist|dist/*) return 0 ;;
         *.sublime-project|*.sublime-workspace) return 0 ;;
         repository.json|repository.json.example) return 0 ;;
