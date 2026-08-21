@@ -1,0 +1,4 @@
+MarkdownPreviewEnhanced 0.1.5
+=============================
+
+- feat: bundled favicon, favicon setting, and reliable preview toggle
