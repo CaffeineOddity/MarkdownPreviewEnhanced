@@ -75,7 +75,12 @@ Build / PR notes: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Support
 
-If this package is useful: [Buy Me a Coffee](https://buymeacoffee.com/caffeineoddity).
+If this package is useful:
+
+- [Buy Me a Coffee](https://buymeacoffee.com/caffeineoddity)
+- WeChat 赞赏:
+
+<p><img src="img/wechat-sponsor.jpg" width="180" alt="WeChat 赞赏码"></p>
 
 ## License
 
