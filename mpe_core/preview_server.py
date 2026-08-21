@@ -200,7 +200,14 @@ def has_sse_clients():
 
 
 
+_LOG = lambda m: None
+
+
 class _Handler(BaseHTTPRequestHandler):
+    # SSE 需要持久连接;默认 HTTP/1.0 会在写完头后关 socket,
+    # EventSource 立刻 error,看起来就像预览从没连上.
+    protocol_version = "HTTP/1.1"
+
     def log_message(self, fmt, *args):
         # Silence default stderr spam; plugin has its own logger.
         pass
@@ -290,6 +297,13 @@ class _Handler(BaseHTTPRequestHandler):
             return False
         if not os.path.isfile(q):
             return False
+        # 频道里已有该文档的 shell,说明插件刚 Toggle 过,GET /?file=
+        # 只是浏览器在加载预览页,不要再通知插件「打开这个文件」.
+        # 点其它 .md 链接时目标频道还是空的,仍会入队.
+        with _STATE.lock:
+            ch = _STATE.channels.get(q)
+            if ch is not None and (ch.shell_html or ch.body_html):
+                return True
         queue_open_doc(q)
         return True
 
@@ -380,6 +394,7 @@ class _Handler(BaseHTTPRequestHandler):
                 enable_katex=settings.get("enable_katex", True),
                 custom_css=settings.get("custom_css", ""),
                 title=settings.get("title", "Markdown Export"),
+                favicon=settings.get("favicon", ""),
             )
             data = html.encode("utf-8")
             self.send_response(200)
@@ -420,7 +435,10 @@ class _Handler(BaseHTTPRequestHandler):
             }, ensure_ascii=False)
             initial_line = json.dumps({"line": ch.editor_line}, ensure_ascii=False)
 
+        _LOG("sse connect file=%s clients=%d" % (
+            file_key, len(ch.sse_queues)))
         try:
+            self.close_connection = False
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-store")
@@ -445,11 +463,13 @@ class _Handler(BaseHTTPRequestHandler):
                     self.wfile.flush()
                     touch_activity()
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
-            pass
+            _LOG("sse drop file=%s" % file_key)
         finally:
             with _STATE.lock:
                 if q in ch.sse_queues:
                     ch.sse_queues.remove(q)
+            _LOG("sse disconnect file=%s clients=%d" % (
+                file_key, len(ch.sse_queues)))
 
     def _safe_join(self, root, rel):
         rel = unquote(rel).replace("\\", "/")
@@ -581,7 +601,9 @@ class PreviewServer:
         return "http://%s:%d" % (self.host, self.port)
 
     def start(self, port=8765, log=None):
+        global _LOG
         log = log or (lambda m: None)
+        _LOG = log
         if self.running:
             touch_activity()
             return self.base_url

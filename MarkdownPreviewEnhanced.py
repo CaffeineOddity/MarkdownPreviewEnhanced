@@ -26,7 +26,6 @@ from .mpe_core.html_builder import build_preview_shell
 from .mpe_core.md_renderer import render as render_markdown, set_debug_log_path
 from .mpe_core.preview_server import (
     SERVER,
-    close_browser_tabs,
     seconds_since_activity,
     pop_open_docs,
     pop_browser_lines,
@@ -112,8 +111,42 @@ def _preview_url(file_path=None):
     return "file://" + config.preview_path()
 
 
+def _open_preview_browser(url, focus_existing):
+    """打开或聚焦预览标签.在后台线程跑,避免 osascript 卡住 UI.
+
+    focus_existing 只在 SSE 仍然连着时为 True.SSE 已断却去 focus,
+    会命中正在关闭/已无 EventSource 的僵尸标签,这次按键等于丢掉.
+    """
+    global _preview_open, _last_browser_open
+    _last_browser_open = time.time()
+    _preview_open = True
+    preferred = config.get("browser", "auto") or "auto"
+    _log("browser open: focus_existing=%s url=%s" % (focus_existing, url))
+
+    def _work():
+        try:
+            ok = _browser.open(
+                url,
+                preferred=preferred,
+                log=_log,
+                focus_existing=focus_existing,
+            )
+            if not ok:
+                _log("browser open returned False: %s" % url)
+        except Exception as e:
+            _log("browser open failed: %s" % e)
+
+    threading.Thread(target=_work, daemon=True).start()
+    _start_scroll_poller()
+
+
 def _preview_alive():
-    """True if we believe the live preview session is still usable."""
+    """True if we believe the live preview session is still usable.
+
+    SSE 已断开时只有「刚 webbrowser.open、等 EventSource 连上」这 3 秒
+    算活着,用来挡住同一轮 loading+正文 开两个标签.不能拿它决定
+    用户 Toggle 要不要打开:否则链接已断的那次重新激活会被丢掉.
+    """
     global _preview_open
     if not _preview_open:
         return False
@@ -121,13 +154,14 @@ def _preview_alive():
         _log("preview flag was set but server is down; treating as closed")
         _preview_open = False
         return False
-    # 服务器常驻后,"服务器在跑"不再代表页面开着;以 SSE 连接为准。
-    # 标签刚打开时 SSE 尚未连上,给 3 秒宽限期避免误判重复开标签。
     if config.get("use_local_server", True) and not has_sse_clients():
-        if time.time() - _last_browser_open > 3:
-            _log("no preview page connected via SSE; treating preview as closed")
+        age = time.time() - _last_browser_open
+        if age > 3:
+            _log("no preview page connected via SSE; treating as closed")
             _preview_open = False
             return False
+        _log("no SSE yet; within open grace (%.2fs) — not a live tab" % age)
+        return True
     return True
 
 
@@ -201,6 +235,7 @@ def _publish(result, view, force_open=False):
     scroll_sync = bool(config.get("scroll_sync", True))
     use_server = bool(config.get("use_local_server", True))
     custom_css = config.get("custom_css", "") or ""
+    favicon = config.get("favicon", "") or ""
     title = _view_title(view)
 
     body = result["body_html"]
@@ -216,6 +251,7 @@ def _publish(result, view, force_open=False):
         use_server=use_server,
         custom_css=custom_css,
         title=title,
+        favicon=favicon,
     )
 
     base_dir = _view_base_dir(view)
@@ -250,36 +286,44 @@ def _publish(result, view, force_open=False):
                 "enable_katex": enable_katex,
                 "custom_css": custom_css,
                 "title": title,
+                "favicon": favicon,
             },
             file_path=channel_key,
         )
 
     _write_files(shell, body)
 
+    sse_live = has_sse_clients()
     if force_open or not _preview_open:
         file_path = view.file_name() if view is not None else None
         url = _preview_url(file_path)
-        import webbrowser as _wb
-        global _last_browser_open
-        _last_browser_open = time.time()
-        _wb.open(url)
-        _preview_open = True
         if view is not None:
             _bound_view_id = view.id()
         _log("preview ready: %s" % url)
-        _start_scroll_poller()
+        # SSE 已断 = 没有可复用的活标签,必须新开,不能 focus 僵尸页
+        _open_preview_browser(url, sse_live)
+    else:
+        _log(
+            "skip browser open (force_open=%s preview_open=%s sse=%s)"
+            % (force_open, _preview_open, sse_live)
+        )
 
 
 def _open_doc_from_browser(path):
-    """Open a .md file clicked in the browser and preview it the standard way."""
+    """浏览器里点了其它 .md 链接时,在编辑器打开并预览.
+
+    Toggle 打开 /?file=当前文档 时服务器也会入队同一路径,不能再
+    open_browser,否则会和 Toggle 抢「要不要开标签」,SSE 将断未断
+    时把重新激活丢掉.
+    """
     window = sublime.active_window()
-    # 已在编辑器中打开则直接复用该 view
     for v in window.views():
         if v.file_name() == path:
             window.focus_view(v)
-            MarkdownPreviewEnhancedListener.render_view(v, force=True, open_browser=True)
+            already_this = _bound_views.get(path) == v.id()
+            MarkdownPreviewEnhancedListener.render_view(
+                v, force=True, open_browser=not already_this)
             return
-    # 否则打开文件,等 on_load_async 再渲染
     _pending_link_opens.add(path)
     window.open_file(path)
 
@@ -405,16 +449,16 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
             self.window.status_message("MarkdownPreviewEnhanced: no active view")
             return
 
-        # Close old tab via SSE (tab closes itself), then open new one
-        if SERVER.running:
-            try:
-                close_browser_tabs()
-            except Exception:
-                pass
-
-        _log("toggle: open preview")
+        # 不先发 SSE close:关标签是异步的,随后 _preview_alive() 仍为 True
+        # 会跳过 webbrowser.open,表现为快捷键按了没反应.已有标签改由
+        # BrowserSession.open(focus_existing=True) 聚焦,没有则新开.
+        _log(
+            "toggle: open preview (sse=%s preview_open=%s)"
+            % (has_sse_clients(), _preview_open)
+        )
         self.window.status_message("MarkdownPreviewEnhanced: opening preview…")
-        MarkdownPreviewEnhancedListener.render_view(view, force=True, open_browser=True)
+        MarkdownPreviewEnhancedListener.render_view(
+            view, force=True, open_browser=True, focus_browser=True)
 
 
 class MarkdownPreviewEnhancedCloseCommand(sublime_plugin.WindowCommand):
@@ -458,6 +502,7 @@ class MarkdownPreviewEnhancedExportHtmlCommand(sublime_plugin.WindowCommand):
                     custom_css=config.get("custom_css", "") or "",
                     title=_view_title(view),
                     log=_log,
+                    favicon=config.get("favicon", "") or "",
                 )
                 msg = "Exported HTML: %s" % dest
                 if errors:
@@ -502,6 +547,7 @@ class MarkdownPreviewEnhancedExportPdfCommand(sublime_plugin.WindowCommand):
                         custom_css=config.get("custom_css", "") or "",
                         title=_view_title(view),
                         log=_log,
+                        favicon=config.get("favicon", "") or "",
                     )
                     sublime.set_timeout(
                         lambda: (
@@ -537,7 +583,7 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
             MarkdownPreviewEnhancedListener.render_view(view, force=True, open_browser=True)
 
     @classmethod
-    def render_view(cls, view, force=False, open_browser=False):
+    def render_view(cls, view, force=False, open_browser=False, focus_browser=False):
         global _preview_open
         if view is None:
             return
@@ -580,9 +626,10 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
 
             def _show_loading():
                 try:
-                    # 只在预览不存活时开浏览器标签;否则会与 /?file= 的
-                    # 排队反馈形成循环,不断打开新标签
-                    _publish(loading_result, view, force_open=not _preview_alive())
+                    # Toggle 始终 open/focus;浏览器内点链接时若标签已在
+                    # 就只推内容,避免 /?file= 回环不断开新标签.
+                    should_open = focus_browser or not _preview_alive()
+                    _publish(loading_result, view, force_open=should_open)
                 except Exception:
                     _log("loading publish failed:\n%s" % traceback.format_exc())
 
@@ -615,8 +662,16 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
 
             def _done():
                 try:
-                    # force_open if user asked to open and we still aren't live
-                    need_open = open_browser and not _preview_alive()
+                    # 正文推送默认不新开标签.仅当用户要求打开、SSE 已断、
+                    # 且不在「刚 open 等连上」宽限内时才补开.
+                    sse_live = has_sse_clients()
+                    awaiting = _preview_alive()
+                    need_open = open_browser and not sse_live and not awaiting
+                    if open_browser and not sse_live and awaiting:
+                        _log(
+                            "content publish: SSE dead but in open grace; "
+                            "not opening a second tab"
+                        )
                     _publish(result, view, force_open=need_open)
                 except Exception:
                     _log("publish failed:\n%s" % traceback.format_exc())

@@ -87,6 +87,7 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | `strip_frontmatter` | `true` | Strip leading YAML `---` blocks |
 | `scroll_sync` | `true` | Editor ↔ preview scroll (needs local server) |
 | `custom_css` | `""` | Path to extra CSS file |
+| `favicon` | `""` | Empty = bundled icon; `"none"` = no icon; otherwise a local path or `http(s)` URL |
 
 View-level override example:
 

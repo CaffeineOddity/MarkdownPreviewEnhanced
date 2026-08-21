@@ -9,7 +9,7 @@ from .md_renderer import render as render_markdown, rewrite_image_srcs
 
 
 def _render_standalone(text, base_dir, mermaid_theme, show_toc, enable_katex,
-                       custom_css, title, log):
+                       custom_css, title, log, favicon):
     """Shared helper: render markdown and build standalone export HTML."""
     result = render_markdown(
         text,
@@ -29,6 +29,7 @@ def _render_standalone(text, base_dir, mermaid_theme, show_toc, enable_katex,
         enable_katex=enable_katex,
         custom_css=custom_css,
         title=title,
+        favicon=favicon,
     )
     return html, result.get("errors") or []
 
@@ -43,11 +44,12 @@ def export_html(
     custom_css="",
     title="Markdown Export",
     log=None,
+    favicon="",
 ):
     log = log or (lambda m: None)
     html, errors = _render_standalone(
         text, base_dir, mermaid_theme, show_toc, enable_katex,
-        custom_css, title, log,
+        custom_css, title, log, favicon,
     )
     dest_path = os.path.expanduser(dest_path)
     os.makedirs(os.path.dirname(dest_path) or ".", exist_ok=True)
@@ -67,6 +69,7 @@ def export_pdf(
     custom_css="",
     title="Markdown Export",
     log=None,
+    favicon="",
 ):
     """Render via headless Chrome/Chromium --print-to-pdf."""
     log = log or (lambda m: None)
@@ -79,7 +82,7 @@ def export_pdf(
 
     html, _errors = _render_standalone(
         text, base_dir, mermaid_theme, show_toc, enable_katex,
-        custom_css, title, log,
+        custom_css, title, log, favicon,
     )
 
     fd, tmp_html = tempfile.mkstemp(suffix=".html", prefix="mdpp_export_")
@@ -128,6 +131,7 @@ def export_png(
     custom_css="",
     title="Markdown Export",
     log=None,
+    favicon="",
 ):
     """Render via headless Chrome/Chromium --screenshot."""
     log = log or (lambda m: None)
@@ -140,7 +144,7 @@ def export_png(
 
     html, _errors = _render_standalone(
         text, base_dir, mermaid_theme, show_toc, enable_katex,
-        custom_css, title, log,
+        custom_css, title, log, favicon,
     )
 
     fd, tmp_html = tempfile.mkstemp(suffix=".html", prefix="mdpp_export_")
