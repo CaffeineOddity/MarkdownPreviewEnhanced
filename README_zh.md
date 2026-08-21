@@ -73,6 +73,10 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 
 二次开发 / PR：[CONTRIBUTING.md](CONTRIBUTING.md)
 
+## 赞助
+
+觉得有用可以请杯咖啡：[Buy Me a Coffee](https://buymeacoffee.com/caffeineoddity)。
+
 ## 许可
 
 MIT — [LICENSE](LICENSE)

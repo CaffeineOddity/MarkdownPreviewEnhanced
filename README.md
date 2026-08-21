@@ -73,6 +73,10 @@ Requires Sublime Text 4 (Build 4107+). Math, diagrams, and highlighting are vend
 
 Build / PR notes: [CONTRIBUTING.md](CONTRIBUTING.md)
 
+## Support
+
+If this package is useful: [Buy Me a Coffee](https://buymeacoffee.com/caffeineoddity).
+
 ## License
 
 MIT — [LICENSE](LICENSE)
