@@ -1,3 +1,5 @@
 # GitHub 仓库页的 Sponsor 按钮。
 github: CaffeineOddity
 buy_me_a_coffee: caffeineoddity
+custom:
+  - "https://github.com/CaffeineOddity/MarkdownPreviewEnhanced/blob/master/README_zh.md#%E8%B5%9E%E5%8A%A9"

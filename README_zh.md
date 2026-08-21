@@ -75,7 +75,12 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 
 ## 赞助
 
-觉得有用可以请杯咖啡：[Buy Me a Coffee](https://buymeacoffee.com/caffeineoddity)。
+觉得有用可以请杯咖啡：
+
+- [Buy Me a Coffee](https://buymeacoffee.com/caffeineoddity)
+- 微信赞赏：
+
+<p><img src="img/wechat-sponsor.jpg" width="180" alt="微信赞赏码"></p>
 
 ## 许可
 
