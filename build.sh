@@ -88,6 +88,7 @@ should_exclude() {
     local rel="$1"
     case "$rel" in
         .git/*|.git) return 0 ;;
+        .github/*|.github) return 0 ;;
         .claude/*|.claude|.omc/*|.omc) return 0 ;;
         __pycache__/*|*/__pycache__/*|*.pyc|*.pyo) return 0 ;;
         .DS_Store|*/.DS_Store|.gitignore|.gitattributes) return 0 ;;
