@@ -14,7 +14,7 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 | ✅ SSE 原地更新（不刷新） | ✅ 代码高亮 |
 | ✅ 滚动位置保留 | ✅ GFM 任务列表 |
 | ✅ 编辑器 ↔ 预览滚动同步 | ✅ 脚注 |
-| ✅ 目录侧栏 | ✅ YAML frontmatter |
+| ✅ 目录 + 预览 tab 列表 | ✅ YAML frontmatter |
 | ✅ 相对路径图片（`./img/a.png`） | ✅ KaTeX（`$…$` / `$$…$$`） |
 | ✅ 导出 HTML / PNG / PDF | ✅ Mermaid 图 |
 | ✅ 自定义 CSS 和 favicon | ✅ ECharts |

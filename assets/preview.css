@@ -64,11 +64,20 @@ body {
   align-items: start;
 }
 
-.mdpp-toc {
+.mdpp-sidebar {
   position: sticky;
   top: 20px;
   max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.mdpp-toc {
   overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
   font-size: 13px;
   line-height: 1.45;
   border: 1px solid var(--mdpp-border);
@@ -142,6 +151,59 @@ body {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.mdpp-tabs {
+  flex: 0 1 auto;
+  max-height: 36vh;
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.45;
+  border: 1px solid var(--mdpp-border);
+  border-radius: var(--mdpp-radius);
+  padding: 12px 14px;
+  background: var(--mdpp-surface);
+  box-shadow: var(--mdpp-shadow);
+}
+
+.mdpp-tabs-title {
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mdpp-muted);
+  margin-bottom: 8px;
+}
+
+.mdpp-tabs ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mdpp-tabs li {
+  margin: 2px 0;
+}
+
+.mdpp-tabs a {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--mdpp-fg);
+  text-decoration: none;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mdpp-tabs a:hover {
+  color: var(--mdpp-link);
+}
+
+.mdpp-tabs-active a {
+  font-weight: 700;
+  background: rgba(127, 127, 127, 0.12);
 }
 
 .markdown-body {
@@ -483,6 +545,7 @@ body {
   .mdpp-toolbar,
   .mdpp-modal,
   .mdpp-countdown,
+  .mdpp-sidebar,
   .mdpp-toc { display: none !important; }
 
   .mdpp-wrap {
@@ -612,9 +675,15 @@ body {
     grid-template-columns: 1fr;
     padding: 16px;
   }
-  .mdpp-toc {
+  .mdpp-sidebar {
     position: static;
+    max-height: none;
+  }
+  .mdpp-toc {
     max-height: 180px;
+  }
+  .mdpp-tabs {
+    max-height: 140px;
   }
   .markdown-body {
     padding: 20px 18px 48px;

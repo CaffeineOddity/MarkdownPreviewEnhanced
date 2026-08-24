@@ -114,8 +114,8 @@ def _preview_url(file_path=None):
 def _open_preview_browser(url, focus_existing):
     """打开或聚焦预览标签.在后台线程跑,避免 osascript 卡住 UI.
 
-    focus_existing 只在 SSE 仍然连着时为 True.SSE 已断却去 focus,
-    会命中正在关闭/已无 EventSource 的僵尸标签,这次按键等于丢掉.
+    同一文档已有预览 tab 时必须聚焦,不能再开一张.SSE 是否连着
+    不改变这条规则.
     """
     global _preview_open, _last_browser_open
     _last_browser_open = time.time()
@@ -299,8 +299,8 @@ def _publish(result, view, force_open=False):
         if view is not None:
             _bound_view_id = view.id()
         log.debug("preview ready: %s" % url)
-        # SSE 已断 = 没有可复用的活标签,必须新开,不能 focus 僵尸页
-        _open_preview_browser(url, sse_live)
+        # 已有该文档的预览 tab 则聚焦;没有才新开
+        _open_preview_browser(url, True)
     else:
         log.debug(
             "skip browser open (force_open=%s preview_open=%s sse=%s)"
@@ -308,20 +308,33 @@ def _publish(result, view, force_open=False):
         )
 
 
+def _focus_existing_preview(file_path):
+    """已有该文档的预览 tab 则聚焦,绝不新开。"""
+    url = _preview_url(file_path)
+    if not url:
+        return
+
+    def _work():
+        try:
+            _browser.focus_existing_tab(url, _browser_log)
+        except Exception as e:
+            log.debug("focus existing preview failed: %s" % e)
+
+    threading.Thread(target=_work, daemon=True).start()
+
+
 def _open_doc_from_browser(path):
     """浏览器里点了其它 .md 链接时,在编辑器打开并预览.
 
-    Toggle 打开 /?file=当前文档 时服务器也会入队同一路径,不能再
-    open_browser,否则会和 Toggle 抢「要不要开标签」,SSE 将断未断
-    时把重新激活丢掉.
+    预览 tab 由浏览器侧复用/新开,插件这边只聚焦已有 tab,不再 webbrowser.open.
     """
     window = sublime.active_window()
     for v in window.views():
         if v.file_name() == path:
             window.focus_view(v)
-            already_this = _bound_views.get(path) == v.id()
             MarkdownPreviewEnhancedListener.render_view(
-                v, force=True, open_browser=not already_this)
+                v, force=True, open_browser=False)
+            _focus_existing_preview(path)
             return
     _pending_link_opens.add(path)
     window.open_file(path)
@@ -580,7 +593,8 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
         if fn and fn in _pending_link_opens:
             _pending_link_opens.discard(fn)
             MarkdownPreviewEnhancedListener.render_view(
-                view, force=True, open_browser=not has_sse_clients())
+                view, force=True, open_browser=False)
+            _focus_existing_preview(fn)
 
     @classmethod
     def render_view(cls, view, force=False, open_browser=False, focus_browser=False):

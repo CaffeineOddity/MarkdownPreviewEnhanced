@@ -10,6 +10,13 @@
     channelFile = new URLSearchParams(window.location.search).get("file") || "";
   } catch (err) {}
   var channelQuery = channelFile ? "?file=" + encodeURIComponent(channelFile) : "";
+
+  function windowNameFor(file) {
+    return "mdpp_" + encodeURIComponent(file || "untitled");
+  }
+
+  try { window.name = windowNameFor(channelFile); } catch (err) {}
+
   var scrollKey = "mdpp-scroll-y";
   var lastReportedLine = 0;
   var lastEditorLine = 0;
@@ -23,6 +30,7 @@
   var leaderWatchdog = null;
   var lastContent = {};   // file -> last content payload (leader 补给晚到的 tab)
   var lastEditor = {};    // file -> last editorLine payload
+  var openTabs = {};      // tabId -> {file, title}
   try {
     if (typeof BroadcastChannel === "function") {
       bc = new BroadcastChannel("mdpp-preview-sse");
@@ -261,8 +269,9 @@
       }
       return;
     }
-    if (msg.type === "who-is-leader" && isLeader) {
-      bcSend({ type: "leader-hello", id: tabId });
+    if (msg.type === "who-is-leader") {
+      if (isLeader) bcSend({ type: "leader-hello", id: tabId });
+      publishTabHello(true);
       return;
     }
     if (msg.type === "need-snapshot" && isLeader) {
@@ -273,6 +282,20 @@
       if (lastEditor[f]) {
         bcSend({ type: "sse", event: "editorLine", data: lastEditor[f] });
       }
+      return;
+    }
+    if (msg.type === "tab-hello") {
+      rememberOpenTab(msg);
+      if (!msg.echo) publishTabHello(true);
+      return;
+    }
+    if (msg.type === "tab-bye") {
+      if (msg.id) delete openTabs[msg.id];
+      renderTabList();
+      return;
+    }
+    if (msg.type === "focus-tab" && msg.file === channelFile) {
+      try { window.focus(); } catch (err) {}
     }
   }
 
@@ -316,12 +339,15 @@
     bc.onmessage = onBcMessage;
     window.addEventListener("pagehide", function (ev) {
       if (ev && ev.persisted) return;
+      publishTabBye();
       announceLeaderGone();
     });
     window.addEventListener("beforeunload", function () {
+      publishTabBye();
       announceLeaderGone();
       disconnectStream();
     });
+    publishTabHello(false);
   }
 
   // 无 BroadcastChannel 时退回「仅可见 tab 持有 SSE」
@@ -340,6 +366,137 @@
     window.addEventListener("beforeunload", function () {
       if (es) { es.close(); es = null; }
     });
+  }
+
+  // ── Preview tabs (侧栏上方的打开文档列表,TOC 在下) ───────────────────
+
+  function fileBasename(path) {
+    if (!path) return document.title || "Preview";
+    var i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+    return i >= 0 ? path.slice(i + 1) : path;
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function currentTabMeta() {
+    return { file: channelFile, title: fileBasename(channelFile) };
+  }
+
+  function publishTabHello(echo) {
+    var meta = currentTabMeta();
+    bcSend({
+      type: "tab-hello",
+      id: tabId,
+      file: meta.file,
+      title: meta.title,
+      echo: !!echo,
+    });
+  }
+
+  function publishTabBye() {
+    bcSend({ type: "tab-bye", id: tabId });
+  }
+
+  function rememberOpenTab(msg) {
+    if (!msg || !msg.id || msg.id === tabId) return;
+    openTabs[msg.id] = {
+      file: typeof msg.file === "string" ? msg.file : "",
+      title: msg.title || fileBasename(msg.file),
+    };
+    renderTabList();
+  }
+
+  function collectedTabs() {
+    var byFile = {};
+    byFile[channelFile || ""] = { file: channelFile, title: fileBasename(channelFile) };
+    Object.keys(openTabs).forEach(function (id) {
+      var it = openTabs[id];
+      var key = it.file || "";
+      if (!byFile[key]) byFile[key] = { file: key, title: it.title || fileBasename(key) };
+    });
+    return Object.keys(byFile).sort(function (a, b) {
+      return (byFile[a].title || "").localeCompare(byFile[b].title || "");
+    }).map(function (k) { return byFile[k]; });
+  }
+
+  function renderTabList() {
+    var list = $("mdpp-tabs-list");
+    if (!list) return;
+    var items = collectedTabs();
+    var html = "";
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var active = it.file === channelFile ? " mdpp-tabs-active" : "";
+      html += '<li class="mdpp-tabs-item' + active + '">'
+        + '<a href="/?file=' + encodeURIComponent(it.file) + '" data-file="'
+        + escHtml(it.file) + '">' + escHtml(it.title) + "</a></li>";
+    }
+    list.innerHTML = html;
+  }
+
+  function fileFromHref(href) {
+    if (!href) return "";
+    try {
+      var u = new URL(href, window.location.href);
+      if (u.origin !== window.location.origin) return "";
+      if (u.pathname !== "/" && u.pathname !== "") return "";
+      return u.searchParams.get("file") || "";
+    } catch (err) {
+      return "";
+    }
+  }
+
+  function switchToPreview(file) {
+    if (!file || file === channelFile) return;
+    var url = "/?file=" + encodeURIComponent(file);
+    var name = windowNameFor(file);
+    // 必须在点击手势里 window.open:BC 的 window.focus() 会被 Chrome 丢掉,
+    // 空 url 的 open("", name) 找不到窗口时还会多出 about:blank。
+    // 目标 tab 已设 window.name 时复用并前置;没有则新开一张。
+    try {
+      window.open(url, name);
+    } catch (err) {
+      window.location.href = url;
+    }
+    bcSend({ type: "focus-tab", file: file });
+    if (cfg.mode === "server") {
+      fetch("/api/open_doc?file=" + encodeURIComponent(file), { cache: "no-store" }).catch(function () {});
+    }
+  }
+
+  function bindTabList() {
+    var nav = $("mdpp-tabs");
+    if (!nav || bindTabList._bound) return;
+    bindTabList._bound = true;
+    nav.addEventListener("click", function (ev) {
+      var a = ev.target.closest ? ev.target.closest("a") : null;
+      if (!a || !nav.contains(a)) return;
+      ev.preventDefault();
+      var file = a.getAttribute("data-file") || fileFromHref(a.getAttribute("href") || "");
+      switchToPreview(file);
+    });
+    renderTabList();
+  }
+
+  function bindPreviewDocLinks() {
+    if (bindPreviewDocLinks._bound) return;
+    bindPreviewDocLinks._bound = true;
+    document.addEventListener("click", function (ev) {
+      if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) {
+        return;
+      }
+      var a = ev.target.closest ? ev.target.closest("a") : null;
+      if (!a) return;
+      var file = fileFromHref(a.getAttribute("href") || "");
+      if (!file) return;
+      ev.preventDefault();
+      switchToPreview(file);
+    }, false);
   }
 
   // ── TOC ──────────────────────────────────────────────────────────────
@@ -546,6 +703,8 @@
   window.mdppInit = function mdppInit() {
     restoreScroll();
     callRenderMath();
+    bindTabList();
+    bindPreviewDocLinks();
     bindTocClicks();
     updateTocActive();
     window.addEventListener("scroll", onScroll, { passive: true });

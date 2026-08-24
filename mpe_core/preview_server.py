@@ -320,6 +320,9 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/api/snapshot":
             self._api_snapshot(parsed.query)
             return
+        if path == "/api/open_doc":
+            self._api_open_doc(parsed.query)
+            return
         if path.startswith("/doc/"):
             self._serve_doc(path[len("/doc/"):])
             return
@@ -444,6 +447,21 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _api_open_doc(self, query):
+        """预览 tab 列表点选:通知插件聚焦对应编辑器,不新开浏览器页。"""
+        file_key = _file_key_from_query(query)
+        if (
+            not file_key
+            or not os.path.isabs(file_key)
+            or not file_key.lower().endswith(".md")
+        ):
+            self.send_error(400, "invalid file")
+            return
+        queue_open_doc(file_key)
+        self.send_response(204)
+        self._cors()
+        self.end_headers()
 
     def _api_snapshot(self, query):
         """Short JSON dump of one channel — follower tabs catch up without SSE."""

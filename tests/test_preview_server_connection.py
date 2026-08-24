@@ -33,6 +33,7 @@ if "sublime" not in sys.modules:
 from mpe_core.preview_server import (  # noqa: E402
     PreviewServer,
     has_sse_clients,
+    pop_open_docs,
     state,
     update_content,
 )
@@ -331,6 +332,54 @@ class PreviewConnectionTests(unittest.TestCase):
             sock2.close()
             from mpe_core import preview_server as ps
             ps._ASSET_MEM.clear()
+
+    def test_open_doc_queues_path(self):
+        fd, path = tempfile.mkstemp(suffix=".md")
+        os.close(fd)
+        try:
+            sock = self._connect()
+            try:
+                _http_get(sock, "/api/open_doc?file=" + quote(path, safe=""))
+                status, headers, rest = _recv_until_headers(sock, timeout=2)
+                self.assertTrue(status.startswith("HTTP/1.1 204"), status)
+                self.assertEqual(headers.get("connection", "").lower(), "close")
+            finally:
+                sock.close()
+            self.assertEqual(pop_open_docs(), [path])
+        finally:
+            os.remove(path)
+
+
+class PreviewTabHintTests(unittest.TestCase):
+    def test_hints_cover_encoded_and_decoded_file_query(self):
+        from mpe_core.browser import _as_url_matches, _preview_match_hints
+
+        encoded = "http://127.0.0.1:8765/?file=%2Ftmp%2Falpha.md"
+        decoded = "http://127.0.0.1:8765/?file=/tmp/alpha.md"
+        for url in (encoded, decoded):
+            hints = _preview_match_hints(url)
+            self.assertTrue(
+                any(h.endswith("/?file=%2Ftmp%2Falpha.md") for h in hints), hints)
+            self.assertTrue(
+                any(h.endswith("/?file=/tmp/alpha.md") for h in hints), hints)
+            expr = _as_url_matches(hints)
+            self.assertIn(" or ", expr)
+            self.assertIn("%2Ftmp%2Falpha.md", expr)
+            self.assertIn("/tmp/alpha.md", expr)
+
+    def test_focus_only_script_does_not_open_tab(self):
+        from mpe_core.browser import BrowserSession, _preview_match_hints
+
+        url = "http://127.0.0.1:8765/?file=%2Ftmp%2Falpha.md"
+        hints = _preview_match_hints(url)
+        session = BrowserSession()
+        script = session._chrome_focus_or_open_script(
+            "Google Chrome", url, hints, False)
+        self.assertNotIn("make new tab", script)
+        self.assertIn("if found then activate", script)
+        script_open = session._chrome_focus_or_open_script(
+            "Google Chrome", url, hints, True)
+        self.assertIn("make new tab", script_open)
 
 
 if __name__ == "__main__":

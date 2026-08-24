@@ -84,6 +84,42 @@ def _url_hint(url):
     return url
 
 
+def _preview_match_hints(url):
+    """同一文档可能是 ?file=%2Fabs%2Fa.md 或 ?file=/abs/a.md,两种都要能对上。"""
+    from urllib.parse import parse_qs, quote, urlparse
+
+    hints = []
+    raw = _url_hint(url)
+    if raw:
+        hints.append(raw)
+    parsed = urlparse(url or "")
+    host = parsed.netloc
+    vals = parse_qs(parsed.query).get("file") or []
+    path = vals[0] if vals else ""
+    if host and path:
+        encoded = "%s/?file=%s" % (host, quote(path, safe=""))
+        decoded = "%s/?file=%s" % (host, path)
+        for item in (encoded, decoded):
+            if item not in hints:
+                hints.append(item)
+    return hints
+
+
+def _as_escape(text):
+    return (text or "").replace("\\", "\\\\").replace('"', "")
+
+
+def _as_url_matches(hints):
+    parts = []
+    for hint in hints:
+        escaped = _as_escape(hint)
+        if escaped:
+            parts.append('(u contains "%s")' % escaped)
+    if not parts:
+        return "false"
+    return "(" + " or ".join(parts) + ")"
+
+
 class BrowserSession:
     """Tracks the last opened browser so we can focus or close it."""
 
@@ -118,12 +154,22 @@ class BrowserSession:
             log("focus: no url")
             return False
         if self.system == "Darwin":
-            return self._focus_mac(url, log)
+            return self._focus_mac(url, log, open_if_missing=True)
         # Best-effort: re-open URL (browsers usually reuse/focus the tab)
         preferred = "auto"
         if self.app_name:
             preferred = self.app_name
         return self.open(url, preferred=preferred, log=log, focus_existing=True)
+
+    def focus_existing_tab(self, url, log):
+        """只聚焦已有预览 tab,找不到也不新开。"""
+        if not url:
+            log("focus existing: no url")
+            return False
+        self.last_url = url
+        if self.system == "Darwin":
+            return self._focus_mac(url, log, open_if_missing=False)
+        return False
 
     def close(self, preview_file_hint=None, log=None):
         log = log or (lambda m: None)
@@ -174,12 +220,24 @@ class BrowserSession:
             log("%s AppleScript error: %s" % (label, e))
             return False
 
-    def _chrome_focus_or_open_script(self, app, url, hint):
-        # Chromium-family: find tab by URL substring, else open tab / window.
+    def _chrome_focus_or_open_script(self, app, url, hints, open_if_missing):
+        # Chromium-family: find tab by URL substring, else optionally open.
+        match = _as_url_matches(hints)
+        open_block = ""
+        if open_if_missing:
+            open_block = (
+                "  if not found then\n"
+                "    if (count of windows) = 0 then\n"
+                "      make new window\n"
+                "      set URL of active tab of front window to targetURL\n"
+                "    else\n"
+                "      tell front window to make new tab with properties {URL:targetURL}\n"
+                "    end if\n"
+                "  end if\n"
+            )
         return (
             'tell application "%s"\n' % app +
             '  set targetURL to "%s"\n' % url +
-            '  set hint to "%s"\n' % hint +
             "  set found to false\n"
             "  if (count of windows) > 0 then\n"
             "    repeat with w in windows\n"
@@ -188,7 +246,7 @@ class BrowserSession:
             "        set tabIndex to tabIndex + 1\n"
             "        try\n"
             "          set u to URL of t\n"
-            "          if u contains hint then\n"
+            "          if %s then\n" % match +
             "            set active tab index of w to tabIndex\n"
             "            set index of w to 1\n"
             "            set found to true\n"
@@ -199,30 +257,30 @@ class BrowserSession:
             "      if found then exit repeat\n"
             "    end repeat\n"
             "  end if\n"
-            "  if not found then\n"
-            "    if (count of windows) = 0 then\n"
-            "      make new window\n"
-            "      set URL of active tab of front window to targetURL\n"
-            "    else\n"
-            "      tell front window to make new tab with properties {URL:targetURL}\n"
-            "    end if\n"
-            "  end if\n"
-            "  activate\n"
+            + open_block +
+            ("  activate\n" if open_if_missing else "  if found then activate\n") +
             "end tell"
         )
 
-    def _safari_focus_or_open_script(self, url, hint):
+    def _safari_focus_or_open_script(self, url, hints, open_if_missing):
+        match = _as_url_matches(hints)
+        open_block = ""
+        if open_if_missing:
+            open_block = (
+                "  if not found then\n"
+                "    open location targetURL\n"
+                "  end if\n"
+            )
         return (
             'tell application "Safari"\n'
             '  set targetURL to "%s"\n' % url +
-            '  set hint to "%s"\n' % hint +
             "  set found to false\n"
             "  if (count of windows) > 0 then\n"
             "    repeat with w in windows\n"
             "      repeat with t in tabs of w\n"
             "        try\n"
             "          set u to URL of t\n"
-            "          if u contains hint then\n"
+            "          if %s then\n" % match +
             "            set current tab of w to t\n"
             "            set index of w to 1\n"
             "            set found to true\n"
@@ -233,10 +291,8 @@ class BrowserSession:
             "      if found then exit repeat\n"
             "    end repeat\n"
             "  end if\n"
-            "  if not found then\n"
-            "    open location targetURL\n"
-            "  end if\n"
-            "  activate\n"
+            + open_block +
+            ("  activate\n" if open_if_missing else "  if found then activate\n") +
             "end tell"
         )
 
@@ -283,14 +339,14 @@ class BrowserSession:
         if not name:
             return self._open_default(url, log)
 
-        hint = _url_hint(url).replace('"', "")
+        hints = _preview_match_hints(url)
         url_safe = url.replace('"', "%22")
 
         if as_name and tab_ok and focus_existing:
             if as_name == "Safari":
-                script = self._safari_focus_or_open_script(url_safe, hint)
+                script = self._safari_focus_or_open_script(url_safe, hints, True)
             else:
-                script = self._chrome_focus_or_open_script(as_name, url_safe, hint)
+                script = self._chrome_focus_or_open_script(as_name, url_safe, hints, True)
             if self._run_osascript(script, log, name):
                 log("%s focus/open: %s" % (name, url))
                 return True
@@ -332,22 +388,24 @@ class BrowserSession:
             log("open -a %s failed: %s" % (name, e))
         return self._open_default(url, log)
 
-    def _focus_mac(self, url, log):
+    def _focus_mac(self, url, log, open_if_missing):
         name, as_name, tab_ok = self._detect_mac("auto")
         if self.as_name:
             as_name = self.as_name
             name = self.app_name or name
             tab_ok = self.supports_tab_script or tab_ok
         if not as_name or not tab_ok:
-            # Fallback: open (often focuses existing)
+            if not open_if_missing:
+                return False
             return self._open_mac(url, "auto", log, focus_existing=True)
 
-        hint = _url_hint(url).replace('"', "")
+        hints = _preview_match_hints(url)
         url_safe = url.replace('"', "%22")
         if as_name == "Safari":
-            script = self._safari_focus_or_open_script(url_safe, hint)
+            script = self._safari_focus_or_open_script(url_safe, hints, open_if_missing)
         else:
-            script = self._chrome_focus_or_open_script(as_name, url_safe, hint)
+            script = self._chrome_focus_or_open_script(
+                as_name, url_safe, hints, open_if_missing)
         ok = self._run_osascript(script, log, name or as_name)
         if ok:
             log("%s focused: %s" % (name or as_name, url))

@@ -14,7 +14,7 @@ Browser live Markdown preview for Sublime Text 4. No extra installs.
 | ✅ SSE in-place update (no reload) | ✅ Syntax highlighting |
 | ✅ Scroll position kept | ✅ GFM task lists |
 | ✅ Editor ↔ preview scroll sync | ✅ Footnotes |
-| ✅ TOC sidebar | ✅ YAML frontmatter |
+| ✅ TOC + preview tab list | ✅ YAML frontmatter |
 | ✅ Relative images (`./img/a.png`) | ✅ KaTeX (`$…$` / `$$…$$`) |
 | ✅ Export HTML / PNG / PDF | ✅ Mermaid diagrams |
 | ✅ Custom CSS & favicon | ✅ ECharts |

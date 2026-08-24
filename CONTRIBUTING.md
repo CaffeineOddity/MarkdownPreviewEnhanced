@@ -33,6 +33,8 @@ edit .md → debounce → render HTML → update_content()
 | --- | --- |
 | `GET /` | Preview shell |
 | `GET /api/stream` | SSE (content + editor line) |
+| `GET /api/snapshot` | Follower tabs catch up without SSE |
+| `GET /api/open_doc` | Preview tab list: focus that file in the editor |
 | `POST /api/browser_scroll` | Browser → editor scroll |
 | `GET /api/export/html` | Standalone HTML |
 | `GET /assets/*` | Vendored JS / CSS / fonts |

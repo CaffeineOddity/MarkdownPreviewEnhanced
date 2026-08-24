@@ -274,10 +274,10 @@ def rewrite_link_hrefs(html, base_dir, mode="server"):
 
     html = _A_HREF_RE.sub(repl, html)
 
-    # 所有非锚点链接新标签打开;已有 target 的不重复添加
+    # 外链新标签打开;.md 预览链接由客户端复用已有 tab,不加 target=_blank
     def add_target(m):
         tag = m.group(0)
-        if 'href="#' in tag or "target=" in tag:
+        if 'href="#' in tag or "target=" in tag or "/?file=" in tag:
             return tag
         return tag[:2] + ' target="_blank"' + tag[2:]
 

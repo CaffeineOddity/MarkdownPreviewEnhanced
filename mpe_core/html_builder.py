@@ -243,6 +243,24 @@ def _cache_first_scripts():
     ) % urls
 
 
+def _preview_sidebar(toc_html, show_toc):
+    """左侧栏:预览 tab 列表在上,TOC 在下。"""
+    tabs = (
+        '<nav id="mdpp-tabs" class="mdpp-tabs" aria-label="Preview tabs">'
+        '<div class="mdpp-tabs-title">Preview tabs</div>'
+        '<ul id="mdpp-tabs-list"></ul>'
+        "</nav>"
+    )
+    toc = ""
+    if show_toc:
+        empty = "" if toc_html else " mdpp-toc-empty"
+        toc = (
+            '<div id="mdpp-toc" class="mdpp-toc%s" aria-label="Table of contents">%s</div>'
+            % (empty, toc_html)
+        )
+    return '<aside class="mdpp-sidebar">%s%s</aside>' % (tabs, toc)
+
+
 def build_preview_shell(
     body_html,
     toc_html="",
@@ -265,20 +283,8 @@ def build_preview_shell(
         except Exception:
             pass
 
-    toc_block = ""
-    layout_class = "mdpp-layout"
-    if show_toc and toc_html:
-        toc_block = (
-            '<aside id="mdpp-toc" class="mdpp-toc" aria-label="Table of contents">%s</aside>'
-            % toc_html
-        )
-        layout_class += " mdpp-has-toc"
-    elif show_toc:
-        toc_block = (
-            '<aside id="mdpp-toc" class="mdpp-toc mdpp-toc-empty" '
-            'aria-label="Table of contents"></aside>'
-        )
-        layout_class += " mdpp-has-toc"
+    toc_block = _preview_sidebar(toc_html, show_toc)
+    layout_class = "mdpp-layout mdpp-has-toc"
 
     mode = "server" if use_server else "file"
     config_js = (
