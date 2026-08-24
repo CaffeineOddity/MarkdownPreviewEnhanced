@@ -1,4 +1,5 @@
 """Local HTTP server for live preview, media, SSE push, and scroll-sync."""
+import hashlib
 import json
 import os
 import queue
@@ -12,6 +13,25 @@ from socketserver import ThreadingMixIn
 from urllib.parse import unquote, urlparse
 
 from . import assets as pkg_assets
+
+# 包内静态资源进程内缓存:(bytes, etag)
+_ASSET_MEM = {}
+_ASSET_MEM_LOCK = threading.Lock()
+
+
+def _cached_package_asset(resource_rel):
+    with _ASSET_MEM_LOCK:
+        hit = _ASSET_MEM.get(resource_rel)
+        if hit is not None:
+            return hit
+    data = pkg_assets.read_bytes(resource_rel)
+    if data is None:
+        return None
+    etag = hashlib.sha256(data).hexdigest()[:16]
+    packed = (data, etag)
+    with _ASSET_MEM_LOCK:
+        _ASSET_MEM[resource_rel] = packed
+    return packed
 
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
@@ -666,10 +686,11 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         resource_rel = "assets/" + "/".join(parts)
-        data = pkg_assets.read_bytes(resource_rel)
-        if data is None:
+        packed = _cached_package_asset(resource_rel)
+        if packed is None:
             self.send_error(404)
             return
+        data, etag = packed
         ext = os.path.splitext(parts[-1])[1].lower()
         content_type = {
             ".html": "text/html; charset=utf-8",
@@ -687,8 +708,16 @@ class _Handler(BaseHTTPRequestHandler):
             ".ttf": "font/ttf",
             ".otf": "font/otf",
         }.get(ext, "application/octet-stream")
+        inm = (self.headers.get("If-None-Match") or "").replace("W/", "").replace('"', "")
+        if etag and etag in inm:
+            self.send_response(304)
+            self._static_headers()
+            self.send_header("ETag", '"%s"' % etag)
+            self.end_headers()
+            return
         self.send_response(200)
         self._static_headers()
+        self.send_header("ETag", '"%s"' % etag)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()

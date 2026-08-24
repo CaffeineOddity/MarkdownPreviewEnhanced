@@ -207,6 +207,42 @@ def _favicon_tag(favicon, use_server):
     return '  <link rel="icon" href="%s"%s>\n' % (_escape_html(href), type_attr)
 
 
+def _cache_first_scripts():
+    """用 Cache Storage 缓存 mermaid/echarts,新 tab 直接读本地,不再走网络。"""
+    urls = _json([
+        "/assets/mermaid.min.js",
+        "/assets/echarts.min.js",
+        "/assets/html2canvas.min.js",
+    ])
+    return (
+        "<script>(function(){"
+        "var urls=%s;"
+        "var CACHE='mdpp-static-v1';"
+        "function addSrc(url){"
+        "var s=document.createElement('script');s.src=url;s.async=true;"
+        "document.head.appendChild(s);}"
+        "function inject(buf){"
+        "var s=document.createElement('script');s.async=true;"
+        "s.src=URL.createObjectURL(new Blob([buf],{type:'application/javascript'}));"
+        "document.head.appendChild(s);}"
+        "function load(url){"
+        "if(!window.caches){addSrc(url);return;}"
+        "caches.open(CACHE).then(function(cache){"
+        "return cache.match(url).then(function(hit){"
+        "if(hit){return hit.arrayBuffer().then(inject);}"
+        "return fetch(url).then(function(res){"
+        "if(!res.ok)throw new Error('fetch '+res.status);"
+        "cache.put(url,res.clone());"
+        "return res.arrayBuffer().then(inject);"
+        "});"
+        "});"
+        "}).catch(function(){addSrc(url);});"
+        "}"
+        "urls.forEach(load);"
+        "})();</script>\n"
+    ) % urls
+
+
 def build_preview_shell(
     body_html,
     toc_html="",
@@ -255,27 +291,19 @@ def build_preview_shell(
     )
 
     mermaid_tag = ""
-    if _asset_exists("mermaid.min.js"):
-        if use_server:
-            mermaid_tag = '<script src="/assets/mermaid.min.js" async></script>\n'
-        else:
-            # Offline: inline so zip installs don't need a disk path.
-            src = _load_asset("mermaid.min.js")
-            if src:
-                mermaid_tag = "<script>%s</script>\n" % src
+    if _asset_exists("mermaid.min.js") and not use_server:
+        src = _load_asset("mermaid.min.js")
+        if src:
+            mermaid_tag = "<script>%s</script>\n" % src
 
     echarts_tag = ""
-    if _asset_exists("echarts.min.js"):
-        if use_server:
-            echarts_tag = '<script src="/assets/echarts.min.js" async></script>\n'
-        else:
-            src = _load_asset("echarts.min.js")
-            if src:
-                echarts_tag = "<script>%s</script>\n" % src
+    if _asset_exists("echarts.min.js") and not use_server:
+        src = _load_asset("echarts.min.js")
+        if src:
+            echarts_tag = "<script>%s</script>\n" % src
 
     html2canvas_tag = ""
-    if use_server and _asset_exists("html2canvas.min.js"):
-        html2canvas_tag = '<script src="/assets/html2canvas.min.js" async></script>\n'
+    cache_loader = _cache_first_scripts() if use_server else ""
 
     meta_refresh = ""
     if not use_server:
@@ -293,6 +321,7 @@ def build_preview_shell(
         "%s"
         "<style>\n%s\n%s\n</style>\n"
         "<script>%s</script>\n"
+        "%s"
         "</head>\n"
         "<body class=\"%s\" data-mdpp-mode=\"%s\">\n"
         "<div class=\"mdpp-toolbar\">\n"
@@ -319,6 +348,7 @@ def build_preview_shell(
         css,
         hl_css,
         config_js,
+        cache_loader,
         layout_class,
         mode,
         toc_block,

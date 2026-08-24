@@ -315,9 +315,22 @@ class PreviewConnectionTests(unittest.TestCase):
             cache = headers.get("cache-control", "").lower()
             self.assertIn("max-age", cache)
             self.assertNotEqual(cache, "no-store")
+            etag = headers.get("etag", "").strip('"')
+            self.assertTrue(etag)
         finally:
             sock.close()
             pkg_assets.read_bytes = orig
+
+        sock2 = self._connect()
+        try:
+            extra = "If-None-Match: \"%s\"\r\n" % etag
+            _http_get(sock2, "/assets/mermaid.min.js", extra_headers=extra)
+            status2, headers2, rest2 = _recv_until_headers(sock2, timeout=2)
+            self.assertTrue(status2.startswith("HTTP/1.1 304"), status2)
+        finally:
+            sock2.close()
+            from mpe_core import preview_server as ps
+            ps._ASSET_MEM.clear()
 
 
 if __name__ == "__main__":
