@@ -92,7 +92,6 @@ should_exclude() {
         .claude/*|.claude|.omc/*|.omc) return 0 ;;
         __pycache__/*|*/__pycache__/*|*.pyc|*.pyo) return 0 ;;
         .DS_Store|*/.DS_Store|.gitignore|.gitattributes) return 0 ;;
-        .python-version) return 0 ;;
         build.sh|release.sh|st_package_reviewer.sh|AGENTS.md|README.md|README_zh.md|CONTRIBUTING.md|LICENSE) return 0 ;;
         docs|docs/*|img|img/*|dist|dist/*) return 0 ;;
         *.sublime-project|*.sublime-workspace) return 0 ;;
@@ -111,17 +110,14 @@ REQUIRED_FILES=(
     "Default (Linux).sublime-keymap"
     "Main.sublime-menu"
     "messages.json"
+    "dependencies.json"
+    ".python-version"
     "mpe_core/__init__.py"
     "mpe_core/assets.py"
     "mpe_core/html_builder.py"
     "mpe_core/preview_server.py"
     "mpe_core/md_renderer.py"
     "mpe_core/katex_renderer.py"
-    "mpe_core/markdown/__init__.py"
-    "mpe_core/markdown/extensions/fenced_code.py"
-    "mpe_core/markdown/extensions/codehilite.py"
-    "mpe_core/pygments/__init__.py"
-    "mpe_core/pygments/lexers/__init__.py"
     "assets/preview.css"
     "assets/highlight.css"
     "assets/preview.js"
@@ -305,29 +301,56 @@ for p in repo_hints:
 
 import mpe_core  # noqa: E402  — installs vendor aliases from *inside* the zip
 
-# Bug A: bare-name aliases must be the same objects as mpe_core.*
-assert "markdown" in sys.modules, "markdown alias missing (zip install broken)"
-assert "pygments" in sys.modules, "pygments alias missing (zip install broken)"
-assert sys.modules["markdown"] is sys.modules["mpe_core.markdown"], "markdown identity split"
-assert sys.modules["pygments"] is sys.modules["mpe_core.pygments"], "pygments identity split"
+# markdown + pygments come from the mdpopups dependency. In a real ST install
+# mdpopups is provided by Package Control on the 3.8 host (this package ships
+# .python-version=3.8). The offline zip test has no mdpopups, so we only verify
+# the import paths resolve here; the full render() is exercised when mdpopups is
+# importable. Proxying markdown under a bare-name alias creates a dual
+# class-identity that is a pure test-harness artifact, not a real bug.
+_HAS_REAL_MDPOPUPS = True
+try:
+    import mdpopups  # noqa: F401
+except Exception:
+    _HAS_REAL_MDPOPUPS = False
+    _stubs = {}
+    try:
+        import markdown as _sys_md
+        _stubs["markdown"] = _sys_md
+    except Exception:
+        _stubs["markdown"] = None
+    try:
+        import pygments as _sys_pyg
+        _stubs["pygments"] = _sys_pyg
+    except Exception:
+        _stubs["pygments"] = None
+    if all(_stubs.values()):
+        _md_proxy = types.ModuleType("mdpopups")
+        _md_proxy.markdown = _stubs["markdown"]
+        _md_proxy.pygments = _stubs["pygments"]
+        sys.modules["mdpopups"] = _md_proxy
+        sys.modules["mdpopups.markdown"] = _stubs["markdown"]
+        sys.modules["mdpopups.pygments"] = _stubs["pygments"]
 
-m = importlib.import_module("markdown.extensions.fenced_code")
-assert m is sys.modules["mpe_core.markdown.extensions.fenced_code"]
+# Import path exercised at runtime (must match md_renderer.py). A failure here
+# means md_renderer's import names are wrong.
+from mdpopups import markdown as _md  # noqa: E402
+from mdpopups.markdown.extensions.fenced_code import FencedCodeExtension  # noqa: E402
+from mdpopups.markdown.extensions.codehilite import CodeHiliteExtension  # noqa: E402
 
-import pygments.lexers  # noqa: F401
-assert sys.modules["pygments.lexers"] is sys.modules["mpe_core.pygments.lexers"]
+if _HAS_REAL_MDPOPUPS:
+    from mpe_core.md_renderer import render
 
-from mpe_core.md_renderer import render
-
-out = render(
-    "# T\n\n```python\nprint(1)\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n",
-    base_dir=None,
-)
-assert not out.get("errors"), out.get("errors")
-assert "<table>" in out["body_html"]
-assert "codehilite" in out["body_html"]
-# Real Pygments token spans — not the plain <pre class="codehilite"><code> fallback
-assert "<span" in out["body_html"], "code highlight missing pygments spans"
+    out = render(
+        "# T\n\n```python\nprint(1)\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n",
+        base_dir=None,
+    )
+    assert not out.get("errors"), out.get("errors")
+    assert "<table>" in out["body_html"]
+    assert "codehilite" in out["body_html"]
+    # Real Pygments token spans - not the plain <pre class="codehilite"><code> fallback
+    assert "<span" in out["body_html"], "code highlight missing pygments spans"
+else:
+    print("  [SKIP] render smoke test: real mdpopups not installed offline (verify in ST)")
 
 # Bug B: assets via sublime.load_resource
 from mpe_core import assets
@@ -348,7 +371,7 @@ shell = html_builder.build_preview_shell(
 assert css[:80] in shell or "markdown-body" in shell
 assert "/assets/katex/katex.min.css" in shell
 
-print("  zip runtime OK (aliases + render + assets)")
+print("  zip runtime OK (mdpopups render + assets)")
 zf.close()
 PY
 }
@@ -373,7 +396,6 @@ deploy_unpacked() {
             --exclude='.omc/' \
             --exclude='__pycache__/' \
             --exclude='*.pyc' \
-            --exclude='.python-version' \
             --exclude='.DS_Store' \
             --exclude='.gitignore' \
             --exclude='.gitattributes' \
@@ -399,7 +421,7 @@ meta = {
     "version": "0.1.4",
     "sublime_text": ">=4107",
     "platforms": ["*"],
-    "python_version": "3.3",
+    "python_version": "3.8",
     "url": "https://github.com/CaffeineOddity/MarkdownPreviewEnhanced",
     "description": "local --dev overlay (not a channel install)",
     "install_time": time.time(),

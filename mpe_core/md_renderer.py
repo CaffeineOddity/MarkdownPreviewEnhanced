@@ -32,17 +32,18 @@ def _mdpp_log(msg):
 
 
 try:
-    # Vendor bare-name aliases (markdown / pygments) are installed in
-    # mpe_core/__init__.py. Prefer extension *instances* below so python-markdown
-    # does not need absolute string imports for fenced_code/tables/etc.
-    from . import markdown as _md
-    from .markdown.extensions.attr_list import AttrListExtension
-    from .markdown.extensions.codehilite import CodeHiliteExtension
-    from .markdown.extensions.fenced_code import FencedCodeExtension
-    from .markdown.extensions.footnotes import FootnoteExtension
-    from .markdown.extensions.nl2br import Nl2BrExtension
-    from .markdown.extensions.tables import TableExtension
-    from .markdown.extensions.toc import TocExtension
+    # markdown + pygments are provided by the ``mdpopups`` dependency (declared
+    # in dependencies.json). mdpopups vendors both correctly so they never
+    # leak into the bare top-level ``sys.modules`` namespace (see issue #2).
+    # This package runs on the Python 3.8 plugin host (.python-version=3.8).
+    from mdpopups import markdown as _md
+    from mdpopups.markdown.extensions.attr_list import AttrListExtension
+    from mdpopups.markdown.extensions.codehilite import CodeHiliteExtension
+    from mdpopups.markdown.extensions.fenced_code import FencedCodeExtension
+    from mdpopups.markdown.extensions.footnotes import FootnoteExtension
+    from mdpopups.markdown.extensions.nl2br import Nl2BrExtension
+    from mdpopups.markdown.extensions.tables import TableExtension
+    from mdpopups.markdown.extensions.toc import TocExtension
     _HAS_MARKDOWN = True
     _IMPORT_ERROR = None
 except Exception as _e:
@@ -498,11 +499,9 @@ def render(
         if math_html:
             _mdpp_log("protected %d math region(s)" % len(math_html))
 
-    # Pass extension *instances*, not string names like
-    # "markdown.extensions.fenced_code". python-markdown resolves strings via
-    # absolute ``importlib.import_module``, which needs a top-level ``markdown``
-    # package. Under Sublime the real module is
-    # ``MarkdownPreviewEnhanced.mpe_core.markdown``; instances avoid that path.
+    # Pass extension *instances* (not string names like
+    # "markdown.extensions.fenced_code") so python-markdown does not need to
+    # resolve extensions via absolute importlib paths at convert time.
     extensions = [
         FencedCodeExtension(),
         TableExtension(),

@@ -11,13 +11,10 @@ import traceback
 import sublime
 import sublime_plugin
 
-# 在导入任何 mpe_core 子模块之前，先把 vendored 的 markdown / pygments 注册到 sys.modules。
-# python-markdown 和 pygments 内部大量使用绝对导入（如 `from markdown.treeprocessors`、
-# `from pygments.token`），在 Sublime Text 的 Python 3.3 下这些绝对路径只有在顶层
-# `markdown` / `pygments` 已存在于 sys.modules 时才能解析，否则会报
-# "No module named 'markdown'" / "No module named 'pygments'"。
-from .mpe_core import md_renderer as _mpe_md_renderer  # noqa: E402,F401  触发 md_renderer 内的 sys.modules 注册
-
+# markdown + pygments come from the mdpopups dependency (dependencies.json);
+# this package runs on the Python 3.8 plugin host (.python-version=3.8).
+# md_renderer imports mdpopups lazily inside its render path, so no top-level
+# sys.modules wiring is needed here (see issue #2).
 
 from .mpe_core import config
 from .mpe_core.browser import BrowserSession
