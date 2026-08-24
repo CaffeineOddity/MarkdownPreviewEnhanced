@@ -481,6 +481,7 @@ body {
   }
 
   .mdpp-toolbar,
+  .mdpp-modal,
   .mdpp-countdown,
   .mdpp-toc { display: none !important; }
 
@@ -554,9 +555,55 @@ body {
   opacity: 1;
   background: var(--mdpp-surface-2);
 }
+.mdpp-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: var(--mdpp-border);
+  opacity: 0.8;
+}
 .mdpp-btn-loading {
   opacity: 1 !important;
   cursor: wait !important;
+}
+.mdpp-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(31, 35, 40, 0.45);
+}
+.mdpp-modal[hidden] {
+  display: none !important;
+}
+.mdpp-modal-card {
+  background: var(--mdpp-bg);
+  border: 1px solid var(--mdpp-border);
+  border-radius: 12px;
+  padding: 16px 16px 12px;
+  text-align: center;
+  box-shadow: 0 8px 28px rgba(31, 35, 40, 0.18);
+}
+.mdpp-modal-card img {
+  display: block;
+  width: 280px;
+  height: 280px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.mdpp-modal-card p {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--mdpp-muted);
+}
+.mdpp-modal-card .mdpp-modal-hint {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.mdpp-modal-hint a {
+  color: var(--mdpp-link);
 }
 
 

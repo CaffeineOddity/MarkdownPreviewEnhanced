@@ -120,6 +120,7 @@ REQUIRED_FILES=(
     "assets/highlight.css"
     "assets/preview.js"
     "assets/favicon.svg"
+    "assets/wechat-sponsor.jpg"
     "assets/mermaid.min.js"
     "assets/echarts.min.js"
     "assets/html2canvas.min.js"

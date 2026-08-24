@@ -531,6 +531,16 @@
       });
   };
 
+  window.mdppCloseSponsor = function mdppCloseSponsor() {
+    var el = $("mdpp-sponsor-modal");
+    if (el) el.hidden = true;
+  };
+
+  window.mdppShowSponsor = function mdppShowSponsor() {
+    var el = $("mdpp-sponsor-modal");
+    if (el) el.hidden = false;
+  };
+
   // ── init ─────────────────────────────────────────────────────────────
 
   window.mdppInit = function mdppInit() {
@@ -540,6 +550,9 @@
     updateTocActive();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("beforeunload", saveScroll);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") window.mdppCloseSponsor();
+    });
 
     if (cfg.mode === "server") {
       if (bc) {

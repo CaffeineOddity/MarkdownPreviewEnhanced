@@ -40,7 +40,7 @@ Command Palette also has Toggle, Close, Refresh, Export HTML, Export PDF.
 
 Edit the file — the browser updates in place (SSE), scroll is kept. Press the shortcut again to focus the existing tab.
 
-Preview toolbar (bottom-left): 🖼️ PNG snapshot, 💾 standalone HTML.
+Preview toolbar (bottom-left): 🖼️ PNG snapshot, 💾 standalone HTML, ☕ tip.
 
 ## Settings
 
