@@ -8,7 +8,7 @@ import datetime
 import os
 
 # release.sh 发版时改为 False;master 开发保持 True。
-DEBUG = False
+DEBUG = True
 
 _PREFIX = "[MarkdownPreviewEnhanced]"
 _PATH = None
