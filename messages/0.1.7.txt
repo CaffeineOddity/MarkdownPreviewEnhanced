@@ -1,0 +1,6 @@
+MarkdownPreviewEnhanced 0.1.7
+=============================
+
+- feat: add a preview tab list and reuse existing document tabs
+- feat: add coffee tip button on the preview toolbar
+- chore: restore debug logging on master
