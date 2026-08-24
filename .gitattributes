@@ -30,6 +30,7 @@
 /st_package_reviewer.sh export-ignore
 /mpe_core/pygments/formatters/img.py export-ignore
 /docs/              export-ignore
+/tests/             export-ignore
 /img/               export-ignore
 /dist/              export-ignore
 *.sublime-project   export-ignore

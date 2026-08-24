@@ -9,13 +9,13 @@ This GitHub repo root **is** the Sublime package root. Do not nest plugin module
 ## Local build
 
 ```bash
-./build.sh --dev                # unpacked overlay in Packages/ (live edit)
+./build.sh -i                   # pack + install zip like Package Control
 ./build.sh --verify --from-git  # pack git HEAD like Package Control + smoke test
 ./release.sh 0.1.6 --dry-run    # preview a release
 ./release.sh 0.1.6              # verify, tag, push (channel is tags:true)
 ```
 
-`--dev` writes `package-metadata.json` into the overlay so Package Control does not reinstall the channel zip over a local test. Prefer committing before `--from-git` / `release.sh`.
+`-i` installs to `Installed Packages/` (same layout as Package Control). Prefer committing before `--from-git` / `release.sh`.
 
 ## Architecture
 
@@ -56,12 +56,12 @@ Debug files under `output_dir` (default: Sublime cache `MarkdownPreviewEnhanced/
 本仓库根目录就是 Sublime 包根目录，不要把插件模块再套一层文件夹。
 
 ```bash
-./build.sh --dev                # 解压到 Packages/ 方便改代码
+./build.sh -i                   # 打 zip 装进 Installed Packages（和 Package Control 一样）
 ./build.sh --verify --from-git  # 按 Package Control 方式打包并跑冒烟
 ./release.sh 0.1.6              # 校验、打 tag、推送（频道已是 tags:true）
 ```
 
-`--dev` 会写 `package-metadata.json`，避免 Package Control 用频道 zip 盖掉本地测试包。打 tag 前先提交。
+打 tag 前先提交。
 
 架构与接口见上文表格。调试文件在 `output_dir`（默认 Sublime 缓存）：`preview.html`、`body.html`、`debug.log`。
 

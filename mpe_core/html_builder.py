@@ -93,7 +93,7 @@ def _katex_head(enabled, use_server=True, inline_css=False):
     css_href, js_href = _katex_urls(use_server=use_server)
     if js_href:
         parts.append(
-            '  <script src="%s"\n'
+            '  <script src="%s" async\n'
             '    onload="if(window.mdppRenderMathSafe)window.mdppRenderMathSafe();'
             'else if(window.mdppRenderMath)window.mdppRenderMath();"></script>\n'
             % js_href
@@ -257,7 +257,7 @@ def build_preview_shell(
     mermaid_tag = ""
     if _asset_exists("mermaid.min.js"):
         if use_server:
-            mermaid_tag = '<script src="/assets/mermaid.min.js"></script>\n'
+            mermaid_tag = '<script src="/assets/mermaid.min.js" async></script>\n'
         else:
             # Offline: inline so zip installs don't need a disk path.
             src = _load_asset("mermaid.min.js")
@@ -267,7 +267,7 @@ def build_preview_shell(
     echarts_tag = ""
     if _asset_exists("echarts.min.js"):
         if use_server:
-            echarts_tag = '<script src="/assets/echarts.min.js"></script>\n'
+            echarts_tag = '<script src="/assets/echarts.min.js" async></script>\n'
         else:
             src = _load_asset("echarts.min.js")
             if src:
@@ -275,7 +275,7 @@ def build_preview_shell(
 
     html2canvas_tag = ""
     if use_server and _asset_exists("html2canvas.min.js"):
-        html2canvas_tag = '<script src="/assets/html2canvas.min.js"></script>\n'
+        html2canvas_tag = '<script src="/assets/html2canvas.min.js" async></script>\n'
 
     meta_refresh = ""
     if not use_server:
@@ -328,12 +328,20 @@ def build_preview_shell(
         html2canvas_tag,
         _katex_rerender_snippet(enable_katex),
         js,
-        "document.addEventListener('DOMContentLoaded',function(){"
         "if(window.mdppInit)mdppInit();"
-        "try{if(window.mermaid){mermaid.initialize({theme:'default'});mermaid.run();}}"
+        "(function(){"
+        "function when(name,fn){"
+        "if(window[name]){fn();return;}"
+        "var n=0,t=setInterval(function(){"
+        "n+=1;if(window[name]){clearInterval(t);fn();}else if(n>200){clearInterval(t);}"
+        "},50);}"
+        "when('mermaid',function(){"
+        "try{mermaid.initialize({theme:'default'});mermaid.run();}"
         "catch(e){console.warn('[MDPP] mermaid init',e);}"
-        "if(window.mdppRenderMathSafe)mdppRenderMathSafe();"
+        "});"
+        "if(window.mdppRenderMathSafe)window.mdppRenderMathSafe();"
         "var _mdppRenderEcharts=function(){"
+        "if(!window.echarts)return;"
         "var el=document.querySelector('.mdpp-echarts:not([data-mdpp-rendered])');"
         "if(!el)return;"
         "var s=el.parentElement.nextElementSibling;"
@@ -344,9 +352,9 @@ def build_preview_shell(
         "window.addEventListener('resize',function(){ch.resize();});"
         "}catch(e){console.error('[MDPP] echarts error',e);}"
         "};"
-        "_mdppRenderEcharts();"
+        "when('echarts',_mdppRenderEcharts);"
         "window.mdppRenderEcharts=_mdppRenderEcharts;"
-        "});",
+        "})();",
     )
 
 

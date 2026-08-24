@@ -2,16 +2,15 @@
 # build.sh — build / install / verify MarkdownPreviewEnhanced for Sublime Text.
 #
 # Package Control installs a *zipped* ``.sublime-package`` built from the GitHub
-# tag (``"tags": true``). Local ``rsync`` into Packages/ is convenient for
-# editing but hides zip-only bugs. This script can produce and validate the same
-# kind of zip PC users get.
+# tag (``"tags": true``). This script produces and validates the same kind of
+# zip PC users get, and can install it locally.
 #
 # Usage:
 #   ./build.sh                # package zip + verify + install as PC-like zip
-#   ./build.sh --dev          # rsync unpacked into Packages/ (live edit)
 #   ./build.sh --package      # only write dist/*.sublime-package
 #   ./build.sh --verify       # package (if needed) + offline zip smoke tests
-#   ./build.sh --install-zip  # package + install zip to Installed Packages/
+#   ./build.sh --install-zip  # package + install zip to Installed Packages/ (short: -i)
+#   ./build.sh -i             # same as --install-zip
 #   ./build.sh --help
 #
 # Source of the zip:
@@ -38,20 +37,19 @@ GREEN=$'\033[0;32m'
 YELLOW=$'\033[1;33m'
 NC=$'\033[0m'
 
-MODE="all"          # all | dev | package | verify | install-zip
+MODE="all"          # all | package | verify | install-zip
 SOURCE=""           # git | worktree | auto
 
 usage() {
-    sed -n '2,22p' "$0" | sed 's/^# \?//'
+    sed -n '2,21p' "$0" | sed 's/^# \?//'
     exit 0
 }
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --dev) MODE="dev" ;;
         --package) MODE="package" ;;
         --verify) MODE="verify" ;;
-        --install-zip) MODE="install-zip" ;;
+        --install-zip|-i) MODE="install-zip" ;;
         --from-git) SOURCE="git" ;;
         --from-worktree) SOURCE="worktree" ;;
         -h|--help) usage ;;
@@ -376,67 +374,6 @@ zf.close()
 PY
 }
 
-deploy_unpacked() {
-    echo "=== deploy unpacked → ${ST_PACKAGES} ==="
-    mkdir -p "$ST_PACKAGES"
-    # Prefer installing from the verified zip so unpacked == what PC ships.
-    if [ -f "$ZIP_PATH" ]; then
-        local tmp
-        tmp="$(mktemp -d "${TMPDIR:-/tmp}/mpe_unpack.XXXXXX")"
-        unzip -q "$ZIP_PATH" -d "$tmp"
-        rsync -a --delete \
-            --exclude='__pycache__/' \
-            --exclude='*.pyc' \
-            "${tmp}/" "${ST_PACKAGES}/"
-        rm -rf "$tmp"
-    else
-        rsync -a --delete \
-            --exclude='.git/' \
-            --exclude='.claude/' \
-            --exclude='.omc/' \
-            --exclude='__pycache__/' \
-            --exclude='*.pyc' \
-            --exclude='.DS_Store' \
-            --exclude='.gitignore' \
-            --exclude='.gitattributes' \
-            --exclude='build.sh' \
-            --exclude='release.sh' \
-            --exclude='AGENTS.md' \
-            --exclude='docs/' \
-            --exclude='img/' \
-            --exclude='dist/' \
-            --exclude='repository.json' \
-            --exclude='repository.json.example' \
-            --exclude='*.sublime-keymap.example' \
-            "${REPO_ROOT}/" "${ST_PACKAGES}/"
-    fi
-    # Package Control 看到 installed_packages 里有同名包、但 unpacked
-    # 目录没有 package-metadata.json,就会在启动时 ignore → 重装 0.1.4 →
-    # plugin_unloaded 把刚拉起的预览服务器杀掉(日志里约 1.5s).
-    python3 - "$ST_PACKAGES/package-metadata.json" <<'PY'
-import json, sys, time
-path = sys.argv[1]
-meta = {
-    "name": "MarkdownPreviewEnhanced",
-    "version": "0.1.4",
-    "sublime_text": ">=4107",
-    "platforms": ["*"],
-    "python_version": "3.8",
-    "url": "https://github.com/CaffeineOddity/MarkdownPreviewEnhanced",
-    "description": "local --dev overlay (not a channel install)",
-    "install_time": time.time(),
-}
-with open(path, "w", encoding="utf-8") as f:
-    json.dump(meta, f)
-print("  wrote", path)
-PY
-    if [ -f "$ST_INSTALLED" ]; then
-        rm -f "$ST_INSTALLED"
-        echo "  removed Installed Packages zip (unpacked overlay is the test install)"
-    fi
-    echo "  done (unpacked)"
-}
-
 install_zip() {
     echo "=== install zip (Package Control layout) ==="
     if [ ! -f "$ZIP_PATH" ]; then
@@ -449,24 +386,21 @@ install_zip() {
         echo "  removing unpacked ${ST_PACKAGES} (so zip is active)"
         rm -rf "$ST_PACKAGES"
     fi
-    cp -f "$ZIP_PATH" "$ST_INSTALLED"
+    # Remove any previously-installed zip first, then copy fresh. This avoids
+    # overwriting a file Sublime may be holding (which fails with
+    # "Operation not permitted" while Sublime is running).
+    rm -f "$ST_INSTALLED" 2>/dev/null || true
+    if [ -f "$ST_INSTALLED" ]; then
+        echo "  ${RED}cannot remove old ${ST_INSTALLED} — quit Sublime Text first, then retry${NC}" >&2
+        exit 1
+    fi
+    cp "$ZIP_PATH" "$ST_INSTALLED"
     echo "  installed → ${ST_INSTALLED}"
     echo "  ${YELLOW}Restart Sublime Text or reload the plugin.${NC}"
-    echo "  ${YELLOW}Warning: if Package Control lists ${PKG_NAME}, it may overwrite this zip with the channel release on startup. For local testing use: ./build.sh --dev${NC}"
 }
 
 # --- main ---
 case "$MODE" in
-    dev)
-        package_zip
-        validate_zip_layout
-        deploy_unpacked
-        # unpacked Packages/ wins over Installed Packages zip (and over
-        # Package Control re-installing the channel release).
-        if [ -f "$ST_INSTALLED" ]; then
-            echo "${YELLOW}Note: unpacked Packages/ overrides Installed Packages zip.${NC}"
-        fi
-        ;;
     package)
         package_zip
         validate_zip_layout

@@ -390,11 +390,11 @@ def _start_scroll_poller():
             pass
 
         if _preview_open:
-            _scroll_timer = threading.Timer(0.5, _tick)
+            _scroll_timer = threading.Timer(0.1, _tick)
             _scroll_timer.daemon = True
             _scroll_timer.start()
 
-    _scroll_timer = threading.Timer(0.5, _tick)
+    _scroll_timer = threading.Timer(0.1, _tick)
     _scroll_timer.daemon = True
     _scroll_timer.start()
 
@@ -577,7 +577,8 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
         fn = view.file_name()
         if fn and fn in _pending_link_opens:
             _pending_link_opens.discard(fn)
-            MarkdownPreviewEnhancedListener.render_view(view, force=True, open_browser=True)
+            MarkdownPreviewEnhancedListener.render_view(
+                view, force=True, open_browser=not has_sse_clients())
 
     @classmethod
     def render_view(cls, view, force=False, open_browser=False, focus_browser=False):
@@ -608,29 +609,6 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
                 _ensure_server()
             except Exception as e:
                 _log("ensure_server failed: %s" % e)
-
-        # Immediate loading shell so browser can open quickly on first toggle
-        if open_browser:
-            loading = (
-                '<p style="color:#666;text-align:center;padding:40px">'
-                "Rendering…</p>"
-            )
-            loading_result = {
-                "body_html": loading,
-                "toc_html": "",
-                "hash": "loading-%s" % time.time(),
-            }
-
-            def _show_loading():
-                try:
-                    # Toggle 始终 open/focus;浏览器内点链接时若标签已在
-                    # 就只推内容,避免 /?file= 回环不断开新标签.
-                    should_open = focus_browser or not _preview_alive()
-                    _publish(loading_result, view, force_open=should_open)
-                except Exception:
-                    _log("loading publish failed:\n%s" % traceback.format_exc())
-
-            sublime.set_timeout(_show_loading, 0)
 
         def _work():
             try:
@@ -663,7 +641,7 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
                     # 且不在「刚 open 等连上」宽限内时才补开.
                     sse_live = has_sse_clients()
                     awaiting = _preview_alive()
-                    need_open = open_browser and not sse_live and not awaiting
+                    need_open = (open_browser and not sse_live and not awaiting) or focus_browser
                     if open_browser and not sse_live and awaiting:
                         _log(
                             "content publish: SSE dead but in open grace; "

@@ -13,8 +13,23 @@
   var scrollKey = "mdpp-scroll-y";
   var lastReportedLine = 0;
   var lastEditorLine = 0;
-  var es = null;           // EventSource
+  var es = null;           // EventSource — 全 origin 只有选中的 leader tab 持有
   var reconnectTimer = null;
+  var bc = null;
+  var tabId = Math.random().toString(36).slice(2) + "-" + String(Date.now());
+  var isLeader = false;
+  var currentLeader = null;
+  var electTimer = null;
+  var leaderWatchdog = null;
+  var lastContent = {};   // file -> last content payload (leader 补给晚到的 tab)
+  var lastEditor = {};    // file -> last editorLine payload
+  try {
+    if (typeof BroadcastChannel === "function") {
+      bc = new BroadcastChannel("mdpp-preview-sse");
+    }
+  } catch (err) {
+    bc = null;
+  }
 
   function $(id) {
     return document.getElementById(id);
@@ -69,55 +84,262 @@
     updateTocActive();
   }
 
-  // ── SSE connection ────────────────────────────────────────────────────
+  // ── SSE + BroadcastChannel ───────────────────────────────────────────
+  //
+  // Chrome HTTP/1.1 每 host 最多 6 条连接。各 tab 自己开 EventSource 会在
+  // 第 7 个预览页卡死。这里全 origin 只让一个 leader tab 持有 /api/stream
+  // (全局流,事件带 file),其它 tab 经 BroadcastChannel 收同一份推送。
+  //
+  // 点 .md 链接时页面往往先拿到 "Rendering..." 占位,插件稍后才 publish。
+  // 跟随 tab 没有 EventSource,若错过那一次 BC 推送就会一直停在占位页,
+  // 所以打开时再拉一次 /api/snapshot,并向 leader 要缓存。
 
-  function connectStream() {
-    if (es) { es.close(); es = null; }
-    if (cfg.mode !== "server") return;
+  function bcSend(msg) {
+    if (!bc) return;
+    try { bc.postMessage(msg); } catch (err) {}
+  }
 
-    es = new EventSource("/api/stream" + channelQuery);
+  function parseEventData(raw) {
+    var data = JSON.parse(raw);
+    return data && typeof data === "object" ? data : {};
+  }
 
-    es.addEventListener("content", function (e) {
+  function eventMatchesTab(data) {
+    if (!data || typeof data.file !== "string") return true;
+    return data.file === channelFile;
+  }
+
+  function rememberPayload(name, data) {
+    if (!data || typeof data.file !== "string") return;
+    if (name === "content") lastContent[data.file] = data;
+    if (name === "editorLine") lastEditor[data.file] = data;
+  }
+
+  function handleSseEvent(name, data) {
+    rememberPayload(name, data);
+    if (name === "content") {
+      if (!eventMatchesTab(data)) return;
+      applyContent(data);
+      return;
+    }
+    if (name === "editorLine") {
+      if (!eventMatchesTab(data)) return;
+      if (data.line && data.line !== lastEditorLine) {
+        lastEditorLine = data.line;
+        scrollToLine(data.line);
+      }
+      return;
+    }
+    if (name === "close") {
+      if (data && data.file && data.file !== channelFile) return;
+      window.close();
+    }
+  }
+
+  function attachStreamHandlers(stream) {
+    stream.addEventListener("content", function (e) {
       try {
-        applyContent(JSON.parse(e.data));
+        var data = parseEventData(e.data);
+        handleSseEvent("content", data);
+        bcSend({ type: "sse", event: "content", data: data });
       } catch (err) {
         console.warn("[MDPP] SSE content parse error", err);
       }
     });
-
-    es.addEventListener("close", function () {
-      window.close();
-    });
-
-    es.addEventListener("editorLine", function (e) {
+    stream.addEventListener("editorLine", function (e) {
       try {
-        var d = JSON.parse(e.data);
-        if (d.line && d.line !== lastEditorLine) {
-          lastEditorLine = d.line;
-          scrollToLine(d.line);
-        }
+        var data = parseEventData(e.data);
+        handleSseEvent("editorLine", data);
+        bcSend({ type: "sse", event: "editorLine", data: data });
       } catch (err) {}
     });
-
+    stream.addEventListener("close", function (e) {
+      var data = {};
+      try { data = parseEventData(e.data); } catch (err) {}
+      bcSend({ type: "sse", event: "close", data: data });
+      handleSseEvent("close", data);
+    });
+    stream.addEventListener("ping", function () {
+      if (isLeader) bcSend({ type: "leader-hello", id: tabId });
+    });
     // EventSource 在 CONNECTING 时也会打 error.这里若 es.close(),
     // 握手中的连接会被掐掉,之后 has_sse_clients 一直是 False,
     // Toggle 每次都当死标签再开一页.
-    es.onerror = function () {
-      if (!es) return;
-      if (es.readyState === EventSource.CONNECTING) return;
-      if (es.readyState === EventSource.OPEN) return;
-      es.close();
-      es = null;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(connectStream, 2000);
+    stream.onerror = function () {
+      if (!stream || stream !== es) return;
+      if (stream.readyState === EventSource.CONNECTING) return;
+      if (stream.readyState === EventSource.OPEN) return;
+      stream.close();
+      if (es === stream) es = null;
+      if (isLeader || !bc) {
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connectStream, 2000);
+      }
     };
+  }
 
-    if (!connectStream._unloadBound) {
-      connectStream._unloadBound = true;
-      window.addEventListener("beforeunload", function () {
-        if (es) { es.close(); es = null; }
-      });
+  function connectStream() {
+    if (es) { es.close(); es = null; }
+    if (cfg.mode !== "server") return;
+    if (bc) {
+      if (!isLeader) return;
+      es = new EventSource("/api/stream");
+    } else {
+      if (document.hidden) return;
+      es = new EventSource("/api/stream" + channelQuery);
     }
+    attachStreamHandlers(es);
+  }
+
+  function disconnectStream() {
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (es) { es.close(); es = null; }
+  }
+
+  function clearLeaderWatchdog() {
+    if (leaderWatchdog) { clearTimeout(leaderWatchdog); leaderWatchdog = null; }
+  }
+
+  function armLeaderWatchdog() {
+    clearLeaderWatchdog();
+    leaderWatchdog = setTimeout(function () {
+      currentLeader = null;
+      startElection();
+    }, 5000);
+  }
+
+  function resignLeader() {
+    if (!isLeader) return;
+    isLeader = false;
+    disconnectStream();
+  }
+
+  function becomeLeader() {
+    if (isLeader) return;
+    isLeader = true;
+    currentLeader = tabId;
+    clearLeaderWatchdog();
+    connectStream();
+    bcSend({ type: "leader-hello", id: tabId });
+  }
+
+  function onLeaderHello(id) {
+    if (!id) return;
+    currentLeader = id;
+    if (isLeader && id !== tabId && id < tabId) {
+      resignLeader();
+    }
+    if (id !== tabId) armLeaderWatchdog();
+  }
+
+  function startElection() {
+    if (!bc) return;
+    if (electTimer) clearTimeout(electTimer);
+    bcSend({ type: "who-is-leader", id: tabId });
+    electTimer = setTimeout(function () {
+      electTimer = null;
+      if (!currentLeader || currentLeader === tabId) becomeLeader();
+    }, 80);
+  }
+
+  function onBcMessage(ev) {
+    var msg = ev.data;
+    if (!msg || !msg.type) return;
+    if (msg.type === "sse") {
+      handleSseEvent(msg.event, msg.data || {});
+      if (currentLeader && currentLeader !== tabId) armLeaderWatchdog();
+      return;
+    }
+    if (msg.type === "leader-hello") {
+      onLeaderHello(msg.id);
+      return;
+    }
+    if (msg.type === "leader-bye") {
+      if (msg.id === currentLeader) {
+        currentLeader = null;
+        startElection();
+      }
+      return;
+    }
+    if (msg.type === "who-is-leader" && isLeader) {
+      bcSend({ type: "leader-hello", id: tabId });
+      return;
+    }
+    if (msg.type === "need-snapshot" && isLeader) {
+      var f = typeof msg.file === "string" ? msg.file : "";
+      if (lastContent[f]) {
+        bcSend({ type: "sse", event: "content", data: lastContent[f] });
+      }
+      if (lastEditor[f]) {
+        bcSend({ type: "sse", event: "editorLine", data: lastEditor[f] });
+      }
+    }
+  }
+
+  function htmlIsPlaceholder(html) {
+    return !html || /Rendering[\.…]/i.test(html);
+  }
+
+  function fetchSnapshot(attempt) {
+    if (cfg.mode !== "server") return;
+    var n = attempt || 0;
+    fetch("/api/snapshot" + channelQuery, { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var html = data && typeof data.html === "string" ? data.html : "";
+        if (html && !htmlIsPlaceholder(html)) {
+          handleSseEvent("content", data);
+          if (data.line) handleSseEvent("editorLine", data);
+          return;
+        }
+        if (n < 40) {
+          setTimeout(function () { fetchSnapshot(n + 1); }, 50);
+        }
+      })
+      .catch(function () {
+        if (n < 40) {
+          setTimeout(function () { fetchSnapshot(n + 1); }, 50);
+        }
+      });
+  }
+
+  function announceLeaderGone() {
+    if (isLeader) {
+      bcSend({ type: "leader-bye", id: tabId });
+      resignLeader();
+    }
+  }
+
+  function bindBroadcast() {
+    if (!bc || bindBroadcast._bound) return;
+    bindBroadcast._bound = true;
+    bc.onmessage = onBcMessage;
+    window.addEventListener("pagehide", function (ev) {
+      if (ev && ev.persisted) return;
+      announceLeaderGone();
+    });
+    window.addEventListener("beforeunload", function () {
+      announceLeaderGone();
+      disconnectStream();
+    });
+  }
+
+  // 无 BroadcastChannel 时退回「仅可见 tab 持有 SSE」
+  function onVisibilityChange() {
+    if (document.hidden) {
+      disconnectStream();
+    } else {
+      connectStream();
+    }
+  }
+
+  function bindVisibility() {
+    if (bindVisibility._bound) return;
+    bindVisibility._bound = true;
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("beforeunload", function () {
+      if (es) { es.close(); es = null; }
+    });
   }
 
   // ── TOC ──────────────────────────────────────────────────────────────
@@ -320,7 +542,16 @@
     window.addEventListener("beforeunload", saveScroll);
 
     if (cfg.mode === "server") {
-      connectStream();
+      if (bc) {
+        bindBroadcast();
+        fetchSnapshot();
+        bcSend({ type: "need-snapshot", file: channelFile, id: tabId });
+        startElection();
+      } else {
+        bindVisibility();
+        fetchSnapshot();
+        connectStream();
+      }
     }
   };
 })();
