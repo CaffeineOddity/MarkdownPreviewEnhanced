@@ -1,0 +1,12 @@
+MarkdownPreviewEnhanced 0.1.6
+=============================
+
+- docs: present features as a checklist table
+- feat: unify plugin logging and quiet tagged releases
+- fix: cache mermaid/echarts locally and drop diagnostic client logs
+- fix: share one SSE across preview tabs to stop Chrome connection hang
+- fix: replace vendored markdown/pygments with mdpopups dependency (issue #2)
+- docs: add WeChat 赞赏码 to README and funding links
+- docs: add Buy Me a Coffee and GitHub Sponsors links
+- docs: list features in English and Chinese READMEs
+- docs: bilingual usage READMEs; move build/PR notes to CONTRIBUTING
