@@ -8,14 +8,17 @@ Browser live Markdown preview for Sublime Text 4. No extra installs.
 
 ## Features
 
-- Live preview in the browser (SSE, no reload, scroll kept)
-- GitHub-style HTML / CSS, syntax highlighting, GFM task lists, footnotes, YAML frontmatter
-- Mermaid, KaTeX, ECharts
-- TOC sidebar and editor ↔ preview scroll sync
-- Relative images (`./img/a.png`)
-- Export HTML, PNG, PDF
-- Custom CSS and favicon (bundled icon by default)
-- macOS / Windows / Linux; everything vendored, no extra installs
+| Preview | Markdown |
+| --- | --- |
+| ✅ Live preview in the browser | ✅ GitHub-style HTML / CSS |
+| ✅ SSE in-place update (no reload) | ✅ Syntax highlighting |
+| ✅ Scroll position kept | ✅ GFM task lists |
+| ✅ Editor ↔ preview scroll sync | ✅ Footnotes |
+| ✅ TOC sidebar | ✅ YAML frontmatter |
+| ✅ Relative images (`./img/a.png`) | ✅ KaTeX (`$…$` / `$$…$$`) |
+| ✅ Export HTML / PNG / PDF | ✅ Mermaid diagrams |
+| ✅ Custom CSS & favicon | ✅ ECharts |
+| ✅ macOS / Windows / Linux | ✅ No extra installs |
 
 ## Install
 
