@@ -14,21 +14,7 @@ import os
 import re
 import hashlib
 
-# ── debug file logging ──────────────────────────────────────────────────────
-_DEBUG_LOG_PATH = os.path.expanduser("~/Downloads/MarkdownPreviewEnhanced/debug.log")
-
-
-def _mdpp_log(msg):
-    import datetime
-    ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:12]
-    line = "[%s] [md_renderer] %s" % (ts, msg)
-    print(line)
-    try:
-        os.makedirs(os.path.dirname(_DEBUG_LOG_PATH), exist_ok=True)
-        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
-    except Exception:
-        pass
+from .log import debug, error
 
 
 try:
@@ -51,7 +37,7 @@ except Exception as _e:
     _IMPORT_ERROR = "%s: %s" % (type(_e).__name__, _e)
     import traceback as _tb
     _IMPORT_TRACEBACK = _tb.format_exc()
-    _mdpp_log("markdown import failed: %s" % _IMPORT_ERROR)
+    error("markdown import failed: %s" % _IMPORT_ERROR)
 
 from .katex_renderer import render_tex_batch  # noqa: E402
 
@@ -109,11 +95,6 @@ _TASK_DONE_RE = re.compile(
     r"(<li>)(\s*)\[x\]\s+",
     re.IGNORECASE,
 )
-
-
-def set_debug_log_path(path):
-    global _DEBUG_LOG_PATH
-    _DEBUG_LOG_PATH = path
 
 
 def _escape(s, quote=False):
@@ -395,15 +376,15 @@ def _extract_math(text):
         try:
             batch = render_tex_batch(math_jobs)
         except Exception as e:
-            _mdpp_log("katex batch failed: %s" % e)
+            debug("katex batch failed: %s" % e)
             batch = None
         if batch is None:
             batch = [None] * len(math_jobs)
         ssr_ok = sum(1 for h in batch if h)
         if ssr_ok:
-            _mdpp_log("katex SSR %d/%d formula(s)" % (ssr_ok, len(math_jobs)))
+            debug("katex SSR %d/%d formula(s)" % (ssr_ok, len(math_jobs)))
         elif math_jobs:
-            _mdpp_log("katex SSR unavailable; client fallback for %d formula(s)" % len(math_jobs))
+            debug("katex SSR unavailable; client fallback for %d formula(s)" % len(math_jobs))
         for job, rendered in zip(math_jobs, batch):
             math_html.append(
                 _math_placeholder_html(job["tex"], job["display"], rendered=rendered)
@@ -441,7 +422,7 @@ def render(
     errors = []
     if not _HAS_MARKDOWN:
         _dbg = _IMPORT_TRACEBACK if "_IMPORT_TRACEBACK" in globals() else _IMPORT_ERROR
-        _mdpp_log("markdown import FAILED:\n%s" % _dbg)
+        error("markdown import FAILED:\n%s" % _dbg)
         body = "<pre>%s</pre>" % _escape(text)
         return {
             "body_html": body,
@@ -497,7 +478,7 @@ def render(
     if enable_math:
         text, math_html = _extract_math(text)
         if math_html:
-            _mdpp_log("protected %d math region(s)" % len(math_html))
+            debug("protected %d math region(s)" % len(math_html))
 
     # Pass extension *instances* (not string names like
     # "markdown.extensions.fenced_code") so python-markdown does not need to
@@ -518,10 +499,10 @@ def render(
         md = _md.Markdown(extensions=extensions, output_format="html5")
         html = md.convert(text)
         toc_html = getattr(md, "toc", "") or ""
-        _mdpp_log("markdown() OK; html len=%d; has_table=%s" % (
+        debug("markdown() OK; html len=%d; has_table=%s" % (
             len(html), "<table>" in html))
     except Exception as e:
-        _mdpp_log("markdown() FAILED: %s" % e)
+        error("markdown() FAILED: %s" % e)
         try:
             fallback_ext = [
                 FencedCodeExtension(),

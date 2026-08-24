@@ -13,6 +13,7 @@ import json
 import threading
 
 from . import assets as pkg_assets
+from .log import debug
 
 _CACHE = {}
 _CACHE_LOCK = threading.Lock()
@@ -130,7 +131,7 @@ process.stdout.write(JSON.stringify(out));
         with open(helper, "w", encoding="utf-8") as f:
             f.write(src.strip() + "\n")
     except Exception as e:
-        print("[MarkdownPreviewEnhanced] katex SSR: cannot write helper: %s" % e)
+        debug("katex SSR: cannot write helper: %s" % e)
         return None
     return helper
 
@@ -147,13 +148,13 @@ def render_tex_batch(jobs):
     if not node:
         # Lazy log once
         if not getattr(render_tex_batch, "_logged_no_node", False):
-            print("[MarkdownPreviewEnhanced] katex SSR: node not found on PATH")
+            debug("katex SSR: node not found on PATH")
             render_tex_batch._logged_no_node = True
         return None
     js_path, _helper_path = _ensure_katex_paths()
     if not js_path:
         if not getattr(render_tex_batch, "_logged_no_js", False):
-            print("[MarkdownPreviewEnhanced] katex SSR: katex.min.js unavailable")
+            debug("katex SSR: katex.min.js unavailable")
             render_tex_batch._logged_no_js = True
         return None
 
@@ -180,7 +181,7 @@ def render_tex_batch(jobs):
     helper = _ensure_helper()
     if not helper:
         if not getattr(render_tex_batch, "_logged_no_helper", False):
-            print("[MarkdownPreviewEnhanced] katex SSR: helper script unavailable")
+            debug("katex SSR: helper script unavailable")
             render_tex_batch._logged_no_helper = True
         return None
     try:
@@ -200,11 +201,11 @@ def render_tex_batch(jobs):
         )
         if r.returncode != 0:
             err = (r.stderr or r.stdout or "")[:300]
-            print("[MarkdownPreviewEnhanced] katex SSR node failed: %s" % err)
+            debug("katex SSR node failed: %s" % err)
             return None
         out = json.loads(r.stdout or "[]")
     except Exception as e:
-        print("[MarkdownPreviewEnhanced] katex SSR exception: %s" % e)
+        debug("katex SSR exception: %s" % e)
         return None
 
     with _CACHE_LOCK:

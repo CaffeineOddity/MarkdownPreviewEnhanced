@@ -141,14 +141,67 @@ PYEOF
 fi
 
 echo
-echo -e "${YELLOW}[1/4] Package Control zip verify & tagging${NC}"
+echo -e "${YELLOW}[1/4] Disable debug logging on the release tag${NC}"
+
+# 发版 tag 上 DEBUG=False,Package Control 用户控制台安静;
+# tag 打完后立刻在 master 上改回 True,本地开发不受影响。
+DEBUG_FLIPPED=false
+
+restore_debug_logging() {
+    python3 - <<'PY'
+import re
+from pathlib import Path
+p = Path("mpe_core/log.py")
+text = p.read_text(encoding="utf-8")
+new, n = re.subn(r"^DEBUG = False[ \t]*$", "DEBUG = True", text, count=1, flags=re.M)
+if n != 1:
+    raise SystemExit("mpe_core/log.py: expected assignment DEBUG = False")
+p.write_text(new, encoding="utf-8")
+print("  DEBUG = True")
+PY
+    git add mpe_core/log.py
+    git commit -q -m "chore: restore debug logging on master"
+    DEBUG_FLIPPED=false
+    echo -e "${GREEN}  Restored DEBUG = True on master${NC}"
+}
+
+if $DRY_RUN; then
+    echo -e "${YELLOW}  [DRY-RUN] Would set mpe_core/log.py DEBUG = False, tag, then restore True${NC}"
+elif git rev-parse "refs/tags/$VERSION" >/dev/null 2>&1; then
+    echo -e "${YELLOW}  Tag $VERSION already exists — not toggling DEBUG${NC}"
+else
+    python3 - <<'PY'
+import re
+from pathlib import Path
+p = Path("mpe_core/log.py")
+text = p.read_text(encoding="utf-8")
+new, n = re.subn(r"^DEBUG = True[ \t]*$", "DEBUG = False", text, count=1, flags=re.M)
+if n != 1:
+    raise SystemExit("mpe_core/log.py: expected assignment DEBUG = True")
+p.write_text(new, encoding="utf-8")
+print("  DEBUG = False")
+PY
+    git add mpe_core/log.py
+    git commit -q -m "chore: disable debug logging for v$VERSION"
+    DEBUG_FLIPPED=true
+    echo -e "${GREEN}  Committed DEBUG = False for v$VERSION${NC}"
+fi
+
+echo
+echo -e "${YELLOW}[2/4] Package Control zip verify & tagging${NC}"
 
 # Package Control installs a zip from the GitHub *tag* (``tags: true``), not
 # whatever happens to be in Packages/ locally. Fail the release if that zip
 # would be missing runtime files or fail the offline smoke test.
 if [ -x build.sh ]; then
     # Worktree must be clean (checked above), so this packs git archive = tag.
-    ./build.sh --verify --from-git
+    if ! ./build.sh --verify --from-git; then
+        if $DEBUG_FLIPPED; then
+            echo -e "${YELLOW}  verify failed; restoring DEBUG = True${NC}"
+            restore_debug_logging
+        fi
+        exit 1
+    fi
 else
     echo -e "${RED}build.sh missing; cannot verify Package Control zip${NC}"
     exit 1
@@ -162,6 +215,10 @@ else
     else
         git tag "$VERSION"
         echo -e "${GREEN}  Tag $VERSION created${NC}"
+    fi
+    # tag 指向 DEBUG=False 的提交;master 继续 True,本地开发不受影响
+    if $DEBUG_FLIPPED; then
+        restore_debug_logging
     fi
     git push
     git push --tags

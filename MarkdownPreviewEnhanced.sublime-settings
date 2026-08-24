@@ -48,5 +48,10 @@
 
     // Preview/export favicon. Empty = bundled icon; "none" = no icon;
     // otherwise a local path (~ expanded) or http(s) URL.
-    "favicon": ""
+    "favicon": "",
+
+    // Verbose plugin logs. Omit or false on Package Control installs (quiet).
+    // Local git builds default verbose unless this is false. Set true on a
+    // release install to debug.
+    // "debug": true
 }

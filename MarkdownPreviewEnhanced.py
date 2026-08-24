@@ -17,10 +17,11 @@ import sublime_plugin
 # sys.modules wiring is needed here (see issue #2).
 
 from .mpe_core import config
+from .mpe_core import log
 from .mpe_core.browser import BrowserSession
 from .mpe_core.export_util import export_html, export_pdf
 from .mpe_core.html_builder import build_preview_shell
-from .mpe_core.md_renderer import render as render_markdown, set_debug_log_path
+from .mpe_core.md_renderer import render as render_markdown
 from .mpe_core.preview_server import (
     SERVER,
     seconds_since_activity,
@@ -47,22 +48,24 @@ _last_browser_open = 0.0
 _pending_link_opens = set()
 
 
-# ── logging ─────────────────────────────────────────────────────────────────
-
-def _file_log(msg):
-    import datetime
-    try:
-        path = config.debug_log_path()
-        ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:12]
-        with open(path, "a", encoding="utf-8") as f:
-            f.write("[%s] %s\n" % (ts, msg))
-    except Exception:
-        pass
+def _server_log(msg):
+    text = msg or ""
+    low = text.lower()
+    if "failed" in low or "error" in low:
+        log.error(text)
+    elif text.startswith("preview server"):
+        log.info(text)
+    else:
+        log.debug(text)
 
 
-def _log(msg):
-    print("[MarkdownPreviewEnhanced] %s" % msg)
-    _file_log(msg)
+def _browser_log(msg):
+    text = msg or ""
+    low = text.lower()
+    if "failed" in low or "error" in low:
+        log.error(text)
+    else:
+        log.debug(text)
 
 
 def _escape(s):
@@ -89,9 +92,9 @@ def _ensure_server():
         return None
     set_output_dir(config.output_dir())
     port = int(config.get("server_port", 8765) or 8765)
-    url = SERVER.start(port=port, log=_log)
+    url = SERVER.start(port=port, log=_server_log)
     if not url:
-        _log("failed to start preview server on port %s+" % port)
+        log.error("failed to start preview server on port %s" % port)
     return url
 
 
@@ -118,20 +121,20 @@ def _open_preview_browser(url, focus_existing):
     _last_browser_open = time.time()
     _preview_open = True
     preferred = config.get("browser", "auto") or "auto"
-    _log("browser open: focus_existing=%s url=%s" % (focus_existing, url))
+    log.debug("browser open: focus_existing=%s url=%s" % (focus_existing, url))
 
     def _work():
         try:
             ok = _browser.open(
                 url,
                 preferred=preferred,
-                log=_log,
+                log=_browser_log,
                 focus_existing=focus_existing,
             )
             if not ok:
-                _log("browser open returned False: %s" % url)
+                log.error("browser open returned False: %s" % url)
         except Exception as e:
-            _log("browser open failed: %s" % e)
+            log.error("browser open failed: %s" % e)
 
     threading.Thread(target=_work, daemon=True).start()
     _start_scroll_poller()
@@ -148,16 +151,16 @@ def _preview_alive():
     if not _preview_open:
         return False
     if config.get("use_local_server", True) and not SERVER.running:
-        _log("preview flag was set but server is down; treating as closed")
+        log.debug("preview flag was set but server is down; treating as closed")
         _preview_open = False
         return False
     if config.get("use_local_server", True) and not has_sse_clients():
         age = time.time() - _last_browser_open
         if age > 3:
-            _log("no preview page connected via SSE; treating as closed")
+            log.debug("no preview page connected via SSE; treating as closed")
             _preview_open = False
             return False
-        _log("no SSE yet; within open grace (%.2fs) — not a live tab" % age)
+        log.debug("no SSE yet; within open grace (%.2fs) — not a live tab" % age)
         return True
     return True
 
@@ -176,9 +179,9 @@ def _stop_server():
     """Release the local HTTP port when preview is no longer needed."""
     if SERVER.running:
         try:
-            SERVER.stop(log=_log)
+            SERVER.stop(log=_server_log)
         except Exception as e:
-            _log("server stop failed: %s" % e)
+            log.error("server stop failed: %s" % e)
 
 
 def _close_preview_ui(stop_server=True):
@@ -193,12 +196,12 @@ def _close_preview_ui(stop_server=True):
         hint = ":%d" % SERVER.port
     else:
         hint = config.preview_path()
-    _browser.close(preview_file_hint=hint, log=_log)
+    _browser.close(preview_file_hint=hint, log=_browser_log)
     _preview_open = False
     _stop_scroll_poller()
     if stop_server:
         _stop_server()
-    _log("preview closed (server %s)" % ("stopped" if stop_server else "kept"))
+    log.info("preview closed (server %s)" % ("stopped" if stop_server else "kept"))
 
 
 def _write_files(shell_html, body_html):
@@ -208,7 +211,7 @@ def _write_files(shell_html, body_html):
         with open(preview, "w", encoding="utf-8") as f:
             f.write(shell_html)
     except Exception as e:
-        _log("write preview.html failed: %s" % e)
+        log.error("write preview.html failed: %s" % e)
     try:
         with open(last, "w", encoding="utf-8") as f:
             f.write(shell_html)
@@ -252,7 +255,6 @@ def _publish(result, view, force_open=False):
     )
 
     base_dir = _view_base_dir(view)
-    set_debug_log_path(config.debug_log_path())
     set_output_dir(config.output_dir())
 
     # Capture raw markdown and settings for server-side PDF/PNG export
@@ -296,11 +298,11 @@ def _publish(result, view, force_open=False):
         url = _preview_url(file_path)
         if view is not None:
             _bound_view_id = view.id()
-        _log("preview ready: %s" % url)
+        log.debug("preview ready: %s" % url)
         # SSE 已断 = 没有可复用的活标签,必须新开,不能 focus 僵尸页
         _open_preview_browser(url, sse_live)
     else:
-        _log(
+        log.debug(
             "skip browser open (force_open=%s preview_open=%s sse=%s)"
             % (force_open, _preview_open, sse_live)
         )
@@ -353,7 +355,7 @@ def _start_scroll_poller():
             try:
                 idle = seconds_since_activity()
                 if idle >= idle_limit:
-                    _log(
+                    log.info(
                         "no client activity for %.0fs — stopping preview server"
                         % idle
                     )
@@ -382,7 +384,7 @@ def _start_scroll_poller():
             docs = pop_open_docs()
             if docs:
                 for path in docs:
-                    _log("open doc from browser link: %s" % path)
+                    log.debug("open doc from browser link: %s" % path)
                 sublime.set_timeout(
                     lambda: [_open_doc_from_browser(p) for p in docs], 0
                 )
@@ -421,7 +423,7 @@ def _scroll_editor_to_line(line, view_id=None):
         view.sel().add(sublime.Region(pt))
         view.show_at_center(pt)
     except Exception as e:
-        _log("scroll editor failed: %s" % e)
+        log.debug("scroll editor failed: %s" % e)
 
 
 def _render_settings():
@@ -442,14 +444,14 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
     def run(self):
         view = self.window.active_view()
         if view is None:
-            _log("no view to preview")
+            log.info("no view to preview")
             self.window.status_message("MarkdownPreviewEnhanced: no active view")
             return
 
         # 不先发 SSE close:关标签是异步的,随后 _preview_alive() 仍为 True
         # 会跳过 webbrowser.open,表现为快捷键按了没反应.已有标签改由
         # BrowserSession.open(focus_existing=True) 聚焦,没有则新开.
-        _log(
+        log.debug(
             "toggle: open preview (sse=%s preview_open=%s)"
             % (has_sse_clients(), _preview_open)
         )
@@ -498,7 +500,7 @@ class MarkdownPreviewEnhancedExportHtmlCommand(sublime_plugin.WindowCommand):
                     enable_katex=bool(config.get("enable_katex", True)),
                     custom_css=config.get("custom_css", "") or "",
                     title=_view_title(view),
-                    log=_log,
+                    log=log.debug,
                     favicon=config.get("favicon", "") or "",
                 )
                 msg = "Exported HTML: %s" % dest
@@ -508,7 +510,7 @@ class MarkdownPreviewEnhancedExportHtmlCommand(sublime_plugin.WindowCommand):
                 sublime.message_dialog(msg)
             except Exception as e:
                 sublime.error_message("Export HTML failed:\n%s" % e)
-                _log(traceback.format_exc())
+                log.error(traceback.format_exc())
 
         self.window.show_input_panel(
             "Export HTML to:", default_path, on_done, None, None)
@@ -543,7 +545,7 @@ class MarkdownPreviewEnhancedExportPdfCommand(sublime_plugin.WindowCommand):
                         enable_katex=bool(config.get("enable_katex", True)),
                         custom_css=config.get("custom_css", "") or "",
                         title=_view_title(view),
-                        log=_log,
+                        log=log.debug,
                         favicon=config.get("favicon", "") or "",
                     )
                     sublime.set_timeout(
@@ -559,7 +561,7 @@ class MarkdownPreviewEnhancedExportPdfCommand(sublime_plugin.WindowCommand):
                         lambda: sublime.error_message("Export PDF failed:\n%s" % err),
                         0,
                     )
-                    _log(traceback.format_exc())
+                    log.error(traceback.format_exc())
 
             threading.Thread(target=_work, daemon=True).start()
 
@@ -590,12 +592,6 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
         if not force and not _preview_open and not open_browser:
             return
 
-        # Ensure renderer logs go to the same debug.log as the plugin.
-        try:
-            set_debug_log_path(config.debug_log_path())
-        except Exception:
-            pass
-
         text = view.substr(sublime.Region(0, view.size()))
         rs = _render_settings()
         base_dir = _view_base_dir(view)
@@ -608,11 +604,11 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
             try:
                 _ensure_server()
             except Exception as e:
-                _log("ensure_server failed: %s" % e)
+                log.error("ensure_server failed: %s" % e)
 
         def _work():
             try:
-                _log("render: text len=%d base_dir=%s" % (len(text), base_dir))
+                log.debug("render: text len=%d base_dir=%s" % (len(text), base_dir))
                 result = render_markdown(
                     text,
                     mermaid_theme=mermaid_theme,
@@ -625,7 +621,7 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
                     enable_math=rs["enable_math"],
                 )
                 if result.get("errors"):
-                    _log("render errors: %r" % result["errors"])
+                    log.error("render errors: %r" % result["errors"])
             except Exception as e:
                 result = {
                     "body_html": "<pre>%s</pre>" % _escape(str(e)),
@@ -633,7 +629,7 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
                     "hash": "err",
                     "errors": [str(e)],
                 }
-                _log("render error:\n%s" % traceback.format_exc())
+                log.error("render error:\n%s" % traceback.format_exc())
 
             def _done():
                 try:
@@ -643,13 +639,13 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
                     awaiting = _preview_alive()
                     need_open = (open_browser and not sse_live and not awaiting) or focus_browser
                     if open_browser and not sse_live and awaiting:
-                        _log(
+                        log.debug(
                             "content publish: SSE dead but in open grace; "
                             "not opening a second tab"
                         )
                     _publish(result, view, force_open=need_open)
                 except Exception:
-                    _log("publish failed:\n%s" % traceback.format_exc())
+                    log.error("publish failed:\n%s" % traceback.format_exc())
 
             sublime.set_timeout(_done, 0)
 
@@ -700,9 +696,9 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
 
 
 def plugin_loaded():
-    set_debug_log_path(config.debug_log_path())
+    log.set_path(config.debug_log_path())
     set_output_dir(config.output_dir())
-    _log("plugin loaded")
+    log.info("plugin loaded")
 
 
 def plugin_unloaded():
