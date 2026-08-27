@@ -604,6 +604,16 @@ body {
   display: flex;
   gap: 6px;
 }
+.mdpp-toolbar-sidebar {
+  position: static;
+  z-index: auto;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--mdpp-border);
+  border-radius: var(--mdpp-radius);
+  background: var(--mdpp-surface);
+  box-shadow: var(--mdpp-shadow);
+}
 .mdpp-toolbar button {
   background: var(--mdpp-surface);
   border: 1px solid var(--mdpp-border);

@@ -243,8 +243,8 @@ def _cache_first_scripts():
     ) % urls
 
 
-def _preview_sidebar(toc_html, show_toc):
-    """左侧栏:预览 tab 列表在上,TOC 在下。"""
+def _preview_sidebar(toc_html, show_toc, toolbar_html=""):
+    """左侧栏:工具栏在上,预览 tab 列表居中,TOC 在下。"""
     tabs = (
         '<nav id="mdpp-tabs" class="mdpp-tabs" aria-label="Preview tabs">'
         '<div class="mdpp-tabs-title">Preview tabs</div>'
@@ -258,7 +258,7 @@ def _preview_sidebar(toc_html, show_toc):
             '<div id="mdpp-toc" class="mdpp-toc%s" aria-label="Table of contents">%s</div>'
             % (empty, toc_html)
         )
-    return '<aside class="mdpp-sidebar">%s%s</aside>' % (tabs, toc)
+    return '<aside class="mdpp-sidebar">%s%s%s</aside>' % (toolbar_html, tabs, toc)
 
 
 def build_preview_shell(
@@ -283,7 +283,15 @@ def build_preview_shell(
         except Exception:
             pass
 
-    toc_block = _preview_sidebar(toc_html, show_toc)
+    toolbar_html = (
+        '<div class="mdpp-toolbar mdpp-toolbar-sidebar">\n'
+        '<button id="mdpp-export-png" title="Export PNG" onclick="mdppExportPng()">🖼️</button>\n'
+        '<button id="mdpp-export-html" title="Export HTML" onclick="mdppExportHtml()">💾</button>\n'
+        '<span class="mdpp-toolbar-sep" aria-hidden="true"></span>\n'
+        '<button id="mdpp-sponsor" title="Tip" onclick="mdppShowSponsor()">☕</button>\n'
+        '</div>\n'
+    )
+    toc_block = _preview_sidebar(toc_html, show_toc, toolbar_html=toolbar_html)
     layout_class = "mdpp-layout mdpp-has-toc"
 
     mode = "server" if use_server else "file"
@@ -330,12 +338,6 @@ def build_preview_shell(
         "%s"
         "</head>\n"
         "<body class=\"%s\" data-mdpp-mode=\"%s\">\n"
-        "<div class=\"mdpp-toolbar\">\n"
-        "<button id=\"mdpp-export-png\" title=\"Export PNG\" onclick=\"mdppExportPng()\">🖼️</button>\n"
-        "<button id=\"mdpp-export-html\" title=\"Export HTML\" onclick=\"mdppExportHtml()\">💾</button>\n"
-        "<span class=\"mdpp-toolbar-sep\" aria-hidden=\"true\"></span>\n"
-        "<button id=\"mdpp-sponsor\" title=\"Tip\" onclick=\"mdppShowSponsor()\">☕</button>\n"
-        "</div>\n"
         "<div id=\"mdpp-sponsor-modal\" class=\"mdpp-modal\" hidden"
         " onclick=\"if(event.target===this)mdppCloseSponsor()\">\n"
         "<div class=\"mdpp-modal-card\">\n"
