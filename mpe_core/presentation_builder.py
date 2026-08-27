@@ -23,7 +23,7 @@ _DECK_CSS = """
 /* Every slide is a fixed 1280x720 canvas; JS computes a uniform
    transform:scale() so the canvas always fits the viewport and is
    centered on the stage. Content never changes slide geometry. */
-:root { --mdpp-slide-w: 1280px; --mdpp-slide-h: 720px; }
+:root { --mdpp-slide-w: 1600px; --mdpp-slide-h: 900px; }
 html, body {
   margin: 0;
   padding: 0;
@@ -147,7 +147,7 @@ _DECK_JS = r"""
 
   /* Fixed design canvas (matches --mdpp-slide-w/h) fitted into the
      viewport with a uniform scale — the core reveal.js trick. */
-  var W = 1280, H = 720;
+  var W = 1600, H = 900;
   function fit() {
     var availW = window.innerWidth - 36;      /* stage margins */
     var availH = window.innerHeight - 56;     /* keep clear of HUD/bar */
