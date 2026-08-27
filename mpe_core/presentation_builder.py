@@ -51,7 +51,7 @@ html, body {
 #mdpp-progress {
   position: fixed;
   left: 0;
-  top: 0;
+  bottom: 0;
   height: 3px;
   width: 0;
   background: var(--mdpp-accent);
