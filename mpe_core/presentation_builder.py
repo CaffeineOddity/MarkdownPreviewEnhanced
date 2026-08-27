@@ -19,42 +19,48 @@ from .html_builder import _katex_rerender_snippet
 # are visibility:hidden (not display:none) so mermaid/KaTeX can measure
 # layout while hidden and render at correct size on first visit.
 _DECK_CSS = """
-/* ── deck shell ──────────────────────────────────────────────────────── */
+/* ── deck shell: fixed 16:9 canvas scaled to fit, like reveal.js ─────── */
+/* Every slide is a fixed 1280x720 canvas; JS computes a uniform
+   transform:scale() so the canvas always fits the viewport and is
+   centered on the stage. Content never changes slide geometry. */
+:root { --mdpp-slide-w: 1280px; --mdpp-slide-h: 720px; }
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--mdpp-surface-2);
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 500px at 50% -140px,
+                    rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0)),
+    var(--mdpp-surface-2);
   color: var(--mdpp-fg);
   font-family: var(--mdpp-font);
 }
 .mdpp-slide {
   position: fixed;
-  inset: 0;
-  overflow-y: auto;
+  top: calc((100vh - 34px) / 2);
+  left: 50%;
+  width: var(--mdpp-slide-w);
+  height: var(--mdpp-slide-h);
   visibility: hidden;
-  padding: 30px 30px 54px;
-  /* soft stage around the white slide page */
-  background:
-    radial-gradient(1200px 500px at 50% -140px,
-                    rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0)),
-    var(--mdpp-surface-2);
-  box-sizing: border-box;
+  transform-origin: center center;
+  /* JS sets transform: translate(-50%, -50%) scale(s) */
 }
 .mdpp-slide.active { visibility: visible; }
 .mdpp-slide > .markdown-body {
   box-sizing: border-box;
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 52px 60px 96px;
-  font-size: 16px;
-  line-height: 1.65;
+  width: 100%;
+  height: 100%;
+  padding: 56px 72px;
+  font-size: 18px;
+  line-height: 1.6;
   text-align: left;
-  /* the white slide "page" floating on the stage */
   background: var(--mdpp-bg);
   border: 1px solid var(--mdpp-border-muted);
-  border-radius: 12px;
-  box-shadow: 0 10px 34px rgba(31, 35, 40, 0.14),
-              0 2px 8px rgba(31, 35, 40, 0.06);
+  border-radius: 10px;
+  box-shadow: 0 12px 38px rgba(31, 35, 40, 0.16),
+              0 3px 9px rgba(31, 35, 40, 0.07);
+  overflow: hidden;                 /* slides clip like real decks */
 }
 /* first heading of each slide gets some breathing room back */
 .mdpp-slide > .markdown-body > :first-child { margin-top: 0 !important; }
@@ -73,7 +79,7 @@ html, body {
 .mdpp-hud {
   position: fixed;
   right: 16px;
-  bottom: 12px;
+  bottom: 8px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -104,27 +110,31 @@ html, body {
 .mdpp-click-l { left: 0; cursor: w-resize; }
 .mdpp-click-r { right: 0; cursor: e-resize; }
 @media print {
+  :root { --mdpp-slide-w: auto; --mdpp-slide-h: auto; }
+  html, body { height: auto; overflow: visible; background: #fff; }
   #mdpp-progress, .mdpp-hud, .mdpp-click { display: none !important; }
   .mdpp-slide {
     position: static;
+    width: auto;
+    height: auto;
+    transform: none !important;
     visibility: visible;
-    overflow: visible;
-    padding: 0;
-    background: none;
     page-break-after: always;
   }
   .mdpp-slide > .markdown-body {
+    width: auto;
+    height: auto;
+    overflow: visible;
     border: none;
     border-radius: 0;
     box-shadow: none;
-    min-height: auto;
-    max-width: none;
     padding: 20px;
+    font-size: 11pt;
   }
 }
 """
 
-# Vanilla-JS deck controller (~1 KB, no dependencies).
+# Vanilla-JS deck controller (~1.4 KB, no dependencies).
 _DECK_JS = r"""
 (function () {
   var slides = Array.prototype.slice.call(
@@ -134,6 +144,21 @@ _DECK_JS = r"""
   var cur = document.getElementById("mdpp-cur");
   var h = parseInt(location.hash.replace("#", ""), 10);
   var idx = isNaN(h) ? 0 : Math.max(0, Math.min(slides.length - 1, h - 1));
+
+  /* Fixed design canvas (matches --mdpp-slide-w/h) fitted into the
+     viewport with a uniform scale — the core reveal.js trick. */
+  var W = 1280, H = 720;
+  function fit() {
+    var availW = window.innerWidth - 36;      /* stage margins */
+    var availH = window.innerHeight - 56;     /* keep clear of HUD/bar */
+    var s = Math.min(availW / W, availH / H);
+    s = Math.max(0.1, Math.min(s, 2));
+    for (var k = 0; k < slides.length; k++) {
+      slides[k].style.transform =
+        "translate(-50%, -50%) scale(" + s + ")";
+    }
+  }
+  window.addEventListener("resize", fit);
 
   function go(n) {
     idx = Math.max(0, Math.min(slides.length - 1, n));
@@ -181,6 +206,7 @@ _DECK_JS = r"""
   });
 
   document.getElementById("mdpp-total").textContent = String(slides.length);
+  fit();
   go(idx);
 })();
 """
