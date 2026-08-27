@@ -60,10 +60,8 @@ body {
   grid-template-columns: 240px minmax(0, 1fr);
   gap: 28px;
   max-width: 1180px;
-  margin: 0 auto;
   padding: 28px 24px 64px;
   align-items: start;
-  justify-content: center;
 }
 
 .mdpp-sidebar {
@@ -219,7 +217,6 @@ body {
   max-width: none;
   padding: 8px 8px 48px 4px;
   background: var(--mdpp-bg);
-  justify-self: center;
 }
 
 /* ── headings ─────────────────────────────────────────────────────────── */
