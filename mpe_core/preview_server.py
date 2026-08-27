@@ -473,14 +473,8 @@ class _Handler(BaseHTTPRequestHandler):
             body_html = (
                 '<p style="color:#666;text-align:center">Rendering…</p>'
             )
-        # Theme from query (?theme=black) defaults to white.
-        theme = "white"
-        q = unquote(query or "").strip()
-        for part in q.split("&"):
-            if part.startswith("theme="):
-                theme = part[len("theme="):] or "white"
         title = os.path.basename(file_key) if file_key else "Presentation"
-        html = build_presentation(body_html, title=title, theme=theme)
+        html = build_presentation(body_html, title=title)
         data = html.encode("utf-8")
         self.send_response(200)
         self._cors()

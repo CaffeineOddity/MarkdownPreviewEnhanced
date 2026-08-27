@@ -1,126 +1,170 @@
-"""Build a reveal.js presentation page from rendered body HTML.
+"""Build a presentation (slide deck) page using the normal preview's own
+markdown rendering — no third-party framework.
 
-Takes the same body_html that the normal preview uses, splits it on <hr>
-(horizontal rule — the Markdown ``---`` slide separator), and wraps each
-fragment as a reveal.js <section>.  All assets (reveal.js, reveal.css,
-themes) are vendored under ``assets/reveal/`` — no CDN, fully offline.
+Slides are the already-rendered body_html split on ``<hr>`` (Markdown
+``---``).  Each slide is a plain ``.markdown-body`` page shown full screen,
+one at a time.  Tables, code blocks, quotes, KaTeX, mermaid and echarts
+render *identically* to the live preview because the very same
+preview.css is inlined here.
 """
+import re
+
 from . import assets as pkg_assets
+from .html_builder import _katex_rerender_snippet
 
 
-_REVEAL_JS = "assets/reveal.min.js"
-_REVEAL_CSS = "assets/reveal/reset.css", "assets/reveal/reveal.css"
-_THEME_BLACK = "assets/reveal/theme-black.css"
-_THEME_WHITE = "assets/reveal/theme-white.css"
-
-# Overrides loaded AFTER reset/reveal/theme so they win the cascade at equal
-# specificity. Document style: left-aligned content like the normal preview
-# (reveal's default centers everything, and the theme's ``.reveal table {
-# margin: auto }`` centers tables — both unwanted here).
-_PRESENTATION_CSS = """
-/* ── presentation overrides (document style, left-aligned) ────────── */
-/* Kill theme quirks that fight the markdown rendering: 42px base with
-   uppercase headings, oversized em-based sizes, double-shrunk code, and
-   the theme's pre shadow / max-height clip. Typography is pinned in px
-   against a fixed 1280x720 slide so proportions stay predictable. */
-.reveal {
-  --r-main-font-size: 30px;
-  --r-main-font: var(--mdpp-font);
-  --r-heading-font: var(--mdpp-font);
-  --r-code-font: var(--mdpp-mono);
-  --r-heading-text-transform: none;
-  --r-block-margin: 0.6em;
-  font-size: 30px;
-  line-height: 1.55;
-}
-.reveal .slides { text-align: left; }
-.reveal .markdown-body {
-  background: transparent;
+# Full-screen deck chrome: one .mdpp-slide per viewport, a thin progress
+# bar, prev/next HUD, and two invisible edge click-zones.  Inactive slides
+# are visibility:hidden (not display:none) so mermaid/KaTeX can measure
+# layout while hidden and render at correct size on first visit.
+_DECK_CSS = """
+/* ── deck shell ──────────────────────────────────────────────────────── */
+html, body {
   margin: 0;
   padding: 0;
-  max-width: none;
-  width: 100%;
-  font-size: inherit;
+  background: var(--mdpp-bg);
+  color: var(--mdpp-fg);
+  font-family: var(--mdpp-font);
 }
-.reveal h1 { font-size: 52px; text-transform: none; text-shadow: none; }
-.reveal h2 { font-size: 38px; text-transform: none; text-shadow: none; }
-.reveal h3 { font-size: 30px; text-transform: none; text-shadow: none; }
-.reveal h4, .reveal h5, .reveal h6 { font-size: 28px; }
-.reveal .markdown-body h1,
-.reveal .markdown-body h2,
-.reveal .markdown-body h3,
-.reveal .markdown-body h4,
-.reveal .markdown-body h5,
-.reveal .markdown-body h6,
-.reveal .markdown-body p,
-.reveal .markdown-body li { text-align: left; }
-.reveal .markdown-body code {
-  /* inline code only — never shrink block code twice */
-  font-size: 0.85em;
+.mdpp-slide {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  visibility: hidden;
+  background: var(--mdpp-bg);
 }
-.reveal .markdown-body :not(pre) > code { font-size: 0.85em; }
-.reveal pre {
-  display: block;
-  width: auto;
-  margin: 0.6em 0;
+.mdpp-slide.active { visibility: visible; }
+.mdpp-slide > .markdown-body {
+  box-sizing: border-box;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 52px 56px 110px;
+  font-size: 16px;
+  line-height: 1.65;
   text-align: left;
-  font-size: 20px;
-  line-height: 1.5;
-  font-weight: normal;
-  box-shadow: var(--mdpp-shadow);
 }
-.reveal pre code {
-  padding: 0;
-  max-height: none;
-  font-size: 100%;
+/* first heading of each slide gets some breathing room back */
+.mdpp-slide > .markdown-body > :first-child { margin-top: 0 !important; }
+
+/* ── chrome: progress bar + HUD + click zones ────────────────────────── */
+#mdpp-progress {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 3px;
+  width: 0;
+  background: var(--mdpp-accent);
+  transition: width 0.15s ease;
+  z-index: 51;
 }
-.reveal .markdown-body table {
-  display: block;
-  width: max-content;
-  max-width: 100%;
-  margin: 0 0 1em;
-  overflow: auto;
-  font-size: 24px;
+.mdpp-hud {
+  position: fixed;
+  right: 16px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 13px/1 var(--mdpp-font);
+  color: var(--mdpp-muted);
+  z-index: 50;
+  user-select: none;
 }
-.reveal .markdown-body th,
-.reveal .markdown-body td { padding: 0.45em 0.7em; }
-.reveal ul, .reveal ol {
-  display: block;
-  text-align: left;
-  margin: 0 0 0.6em 1.4em;
+.mdpp-hud button {
+  border: 1px solid var(--mdpp-border);
+  background: var(--mdpp-surface);
+  border-radius: 6px;
+  min-width: 30px;
+  height: 27px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
 }
-.reveal .markdown-body img {
-  border: none;
-  box-shadow: none;
-  max-width: 90%;
-  max-height: 60vh;
+.mdpp-hud button:hover { background: var(--mdpp-surface-2); }
+.mdpp-click {
+  position: fixed;
+  top: 0;
+  bottom: 44px;
+  width: 22%;
+  z-index: 40;
+  cursor: pointer;
 }
-.reveal .katex-display { font-size: 1em; margin: 0.5em 0; }
-.reveal pre.mermaid, .reveal .mermaid-svg { max-width: 90%; margin: 0.5em 0; }
+.mdpp-click-l { left: 0; cursor: w-resize; }
+.mdpp-click-r { right: 0; cursor: e-resize; }
+@media print {
+  #mdpp-progress, .mdpp-hud, .mdpp-click { display: none !important; }
+  .mdpp-slide {
+    position: static;
+    visibility: visible;
+    overflow: visible;
+    page-break-after: always;
+  }
+}
 """
 
+# Vanilla-JS deck controller (~1 KB, no dependencies).
+_DECK_JS = r"""
+(function () {
+  var slides = Array.prototype.slice.call(
+    document.querySelectorAll(".mdpp-slide"));
+  if (!slides.length) return;
+  var bar = document.getElementById("mdpp-progress");
+  var cur = document.getElementById("mdpp-cur");
+  var h = parseInt(location.hash.replace("#", ""), 10);
+  var idx = isNaN(h) ? 0 : Math.max(0, Math.min(slides.length - 1, h - 1));
 
-def _load_text(rel):
-    return pkg_assets.read_text(rel) or ""
+  function go(n) {
+    idx = Math.max(0, Math.min(slides.length - 1, n));
+    for (var k = 0; k < slides.length; k++) {
+      slides[k].classList.toggle("active", k === idx);
+    }
+    cur.textContent = String(idx + 1);
+    bar.style.width = (((idx + 1) / slides.length) * 100) + "%";
+    if (slides[idx]) slides[idx].scrollTop = 0;
+    try { history.replaceState(null, "", "#" + (idx + 1)); } catch (e) {}
+    if (window.mdppRenderMathSafe) window.mdppRenderMathSafe();
+    if (window.mdppRenderEcharts) window.mdppRenderEcharts();
+  }
+  function next() { go(idx + 1); }
+  function prev() { go(idx - 1); }
 
+  document.getElementById("mdpp-next").addEventListener("click", next);
+  document.getElementById("mdpp-prev").addEventListener("click", prev);
+  document.querySelector(".mdpp-click-r").addEventListener("click", next);
+  document.querySelector(".mdpp-click-l").addEventListener("click", prev);
 
-def _available():
-    """True if reveal.js core JS + CSS are present in the package."""
-    return (
-        pkg_assets.exists(_REVEAL_JS)
-        and pkg_assets.exists("assets/reveal/reveal.css")
-    )
+  document.addEventListener("keydown", function (e) {
+    var tag = e.target && e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    switch (e.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+      case "PageDown":
+      case " ":
+        next(); e.preventDefault(); break;
+      case "ArrowLeft":
+      case "ArrowUp":
+      case "PageUp":
+        prev(); e.preventDefault(); break;
+      case "Home": go(0); e.preventDefault(); break;
+      case "End": go(slides.length - 1); e.preventDefault(); break;
+      case "f": case "F":
+        if (document.fullscreenElement) { document.exitFullscreen(); }
+        else if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen();
+        }
+        e.preventDefault(); break;
+      default: break;
+    }
+  });
+
+  document.getElementById("mdpp-total").textContent = String(slides.length);
+  go(idx);
+})();
+"""
 
 
 def _split_slides(body_html):
-    """Split rendered HTML into slide fragments on <hr> tags.
-
-    Markdown ``---`` (with blank lines around it) becomes ``<hr>``.  We
-    split on any ``<hr ...>`` tag, preserving the inner HTML of each
-    fragment.
-    """
-    import re
-    # Split on <hr>, <hr/>, <hr />, <hr class="..."> — any variant.
+    """Split rendered HTML into slide fragments on <hr> tags."""
     parts = re.split(r"<hr\s*/?>", body_html, flags=re.IGNORECASE)
     slides = []
     for p in parts:
@@ -132,113 +176,9 @@ def _split_slides(body_html):
     return slides
 
 
-def build_presentation(
-    body_html,
-    title="Presentation",
-    theme="white",
-    enable_katex=True,
-):
-    """Return a full HTML document string for a reveal.js slide deck.
-
-    Parameters
-    ----------
-    body_html : str
-        Already-rendered HTML body (from md_renderer.render).
-    title : str
-        Browser tab / deck title.
-    theme : str
-        ``"white"`` (default, good for projectors) or ``"black"``.
-    enable_katex : bool
-        If True, inject the same KaTeX CSS/JS links the normal preview uses.
-    """
-    if not _available():
-        return (
-            "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-            "<title>reveal.js missing</title></head>"
-            "<body style='font-family:sans-serif;padding:40px;color:#333'>"
-            "<h2>Presentation mode unavailable</h2>"
-            "<p>reveal.js assets are not installed.</p>"
-            "</body></html>"
-        )
-
-    slides = _split_slides(body_html)
-
-    # Wrap each slide in .markdown-body so the normal preview's content
-    # styles (tables, code, quotes, lists …) apply inside reveal slides.
-    sections = []
-    for s in slides:
-        sections.append(
-            '<section><div class="markdown-body">%s</div></section>' % s
-        )
-    slides_html = "\n".join(sections)
-
-    # --- CSS (inlined for a self-contained page) ----------------------
-    # Order matters: preview.css first so reveal's reset/theme override the
-    # page-level styles (body/html) while .markdown-body content styles win
-    # by specificity and keep the markdown rendering (tables, code, …).
-    # _PRESENTATION_CSS goes LAST so it beats theme rules (e.g. the theme's
-    # ``.reveal table { margin: auto }``) at equal specificity.
-    css_parts = [_load_text("assets/preview.css")]
-    for rel in _REVEAL_CSS:
-        css_parts.append(_load_text(rel))
-    if theme == "black":
-        css_parts.append(_load_text(_THEME_BLACK))
-    else:
-        css_parts.append(_load_text(_THEME_WHITE))
-    # Highlight CSS from the normal preview so code blocks look the same.
-    css_parts.append(_load_text("assets/highlight.css"))
-    css_parts.append(_PRESENTATION_CSS)
-    inlined_css = "\n".join(css_parts)
-
-    # --- KaTeX (optional, reuse normal preview paths) -----------------
-    katex_head = ""
-    if enable_katex:
-        css_href = "/assets/katex/katex.min.css"
-        js_href = "/assets/katex/katex.min.js"
-        if pkg_assets.exists("assets/katex/katex.min.css"):
-            katex_head = (
-                '<link rel="stylesheet" href="%s">\n'
-                '  <script src="%s" async onload='
-                '"if(window.mdppRenderMathSafe)window.mdppRenderMathSafe();'
-                'else if(window.mdppRenderMath)window.mdppRenderMath();"></script>\n'
-                % (css_href, js_href)
-            )
-
-    # --- reveal.js core JS (inlined) ----------------------------------
-    reveal_js = _load_text(_REVEAL_JS)
-
-    # --- KaTeX re-render snippet (same as normal preview) -------------
-    from .html_builder import _katex_rerender_snippet
-    katex_snippet = _katex_rerender_snippet(enable_katex)
-
-    # --- Mermaid / echarts: load from /assets/ like the normal preview -
-    extra_scripts = (
-        '<script>(function(){'
-        'function when(name,fn){'
-        'if(window[name]){fn();return;}'
-        'var n=0,t=setInterval(function(){'
-        'n+=1;if(window[name]){clearInterval(t);fn();}'
-        'else if(n>200){clearInterval(t);}},50);}'
-        'when("mermaid",function(){'
-        'try{mermaid.initialize({theme:"default",startOnLint:!1});'
-        'mermaid.run();}catch(e){console.warn("[MDPP] mermaid",e);}});'
-        'var _r=function(){'
-        'if(!window.echarts)return;'
-        'var el=document.querySelector('
-        '".mdpp-echarts:not([data-mdpp-rendered])");'
-        'if(!el)return;'
-        'var s=el.parentElement.nextElementSibling;'
-        'if(!s||!s.classList.contains("mdpp-echarts-config"))return;'
-        'try{var opt=JSON.parse(s.textContent.trim());'
-        'var ch=echarts.init(el);ch.setOption(opt);'
-        'el.setAttribute("data-mdpp-rendered","1");'
-        'window.addEventListener("resize",function(){ch.resize();});'
-        '}catch(e){console.error("[MDPP] echarts",e);}};'
-        'when("echarts",_r);window.mdppRenderEcharts=_r;'
-        '})();</script>\n'
-    )
-    # Load mermaid + echarts from server /assets/ (cached by browser).
-    cache_loader = (
+def _static_scripts():
+    """Load mermaid + echarts from the local server (Cache-Storage backed)."""
+    return (
         '<script>(function(){'
         'var urls=["/assets/mermaid.min.js","/assets/echarts.min.js"];'
         'function addSrc(u){var s=document.createElement("script");'
@@ -247,71 +187,101 @@ def build_presentation(
         'caches.open("mdpp-static-v1").then(function(c){'
         'urls.forEach(function(u){'
         'c.match(u).then(function(h){'
-        'if(h){h.arrayBuffer().then(function(b){'
-        'var s=document.createElement("script");s.async=true;'
+        'if(h){h.arrayBuffer().then(inject);}else{addSrc(u);}'
+        'function inject(b){var s=document.createElement("script");'
+        's.async=true;'
         's.src=URL.createObjectURL(new Blob([b],'
         '{type:"application/javascript"}));'
-        'document.head.appendChild(s);});return;}'
-        'fetch(u).then(function(r){c.put(u,r.clone());'
-        'r.arrayBuffer().then(function(b){'
-        'var s=document.createElement("script");s.async=true;'
-        's.src=URL.createObjectURL(new Blob([b],'
-        '{type:"application/javascript"}));'
-        'document.head.appendChild(s);});});});});});'
-        '})();</script>\n'
+        'document.head.appendChild(s);}})'
+        '.catch(function(){addSrc(u);});});});})();</script>\n',
+        '<script>(function(){'
+        'var n=0,t=setInterval(function(){n+=1;'
+        'if(n>240){clearInterval(t);return;}'
+        'if(window.mermaid&&!window.__mdppMm){window.__mdppMm=1;'
+        'try{mermaid.initialize({theme:"default",startOnLoad:false});'
+        'mermaid.run();}catch(e){console.warn("[MDPP] mermaid",e);}}'
+        'if(window.echarts){clearInterval(t);_r();}'
+        'function _r(){try{var els=document.querySelectorAll('
+        '".mdpp-echarts:not([data-mdpp-rendered])");'
+        'for(var k=0;k<els.length;k++){var el=els[k];'
+        'var s=el.parentElement.nextElementSibling;'
+        'if(!s||!s.classList.contains("mdpp-echarts-config"))continue;'
+        'var opt=JSON.parse(s.textContent.trim());'
+        'var ch=echarts.init(el);ch.setOption(opt);'
+        'el.setAttribute("data-mdpp-rendered","1");'
+        'window.addEventListener("resize",(function(c){'
+        'return function(){c.resize();};})(ch));}}catch(e){'
+        'console.error("[MDPP] echarts",e);}}},250);})();</script>\n'
     )
+
+
+def build_presentation(body_html, title="Presentation", enable_katex=True):
+    """Return a standalone slide-deck HTML document.
+
+    The look & feel is exactly the normal preview: preview.css +
+    highlight.css inline, KaTeX loaded from package assets.  Only the
+    paging chrome is added on top.
+    """
+    css_parts = [
+        pkg_assets.read_text("assets/preview.css") or "",
+        pkg_assets.read_text("assets/highlight.css") or "",
+        _DECK_CSS,
+    ]
+    inlined_css = "\n".join(css_parts)
+
+    katex_head = ""
+    if enable_katex and pkg_assets.exists("assets/katex/katex.min.css"):
+        katex_head = (
+            '<link rel="stylesheet" href="/assets/katex/katex.min.css">\n'
+            '  <script src="/assets/katex/katex.min.js" async onload='
+            '"if(window.mdppRenderMathSafe)window.mdppRenderMathSafe();"></script>\n'
+        )
+
+    slides = _split_slides(body_html)
+    sections = "\n".join(
+        '<div class="mdpp-slide%s"><div class="markdown-body">%s</div></div>'
+        % (" active" if n == 0 else "", s)
+        for n, s in enumerate(slides)
+    )
+
+    loader_js, init_js = _static_scripts()
 
     html = (
         "<!DOCTYPE html>\n"
-        "<html lang='en'>\n"
+        "<html lang=\"en\">\n"
         "<head>\n"
-        "<meta charset='utf-8'>\n"
-        "<meta name='viewport' content='width=device-width, initial-scale=1, "
-        "maximum-scale=1, user-scalable=no'>\n"
+        "<meta charset=\"utf-8\">\n"
+        "<meta name=\"viewport\" content=\"width=device-width, "
+        "initial-scale=1\">\n"
         "<title>%s</title>\n"
         "<style>\n%s\n</style>\n"
         "%s"
         "</head>\n"
         "<body>\n"
-        "<div class='reveal'>\n"
-        "<div class='slides'>\n"
         "%s\n"
+        "<div id=\"mdpp-progress\"></div>\n"
+        "<div class=\"mdpp-click mdpp-click-l\" title=\"Previous (←)\"></div>\n"
+        "<div class=\"mdpp-click mdpp-click-r\" title=\"Next (→)\"></div>\n"
+        "<div class=\"mdpp-hud\">\n"
+        "<button id=\"mdpp-prev\" title=\"Previous (←)\">‹</button>\n"
+        "<span><span id=\"mdpp-cur\">1</span>/<span id=\"mdpp-total\">?</span>"
+        "</span>\n"
+        "<button id=\"mdpp-next\" title=\"Next (→)\">›</button>\n"
         "</div>\n"
-        "</div>\n"
-        "<script>%s</script>\n"
         "<script>%s</script>\n"
         "%s"
         "%s"
-        "<script>\n"
-        "Reveal.initialize({\n"
-        "  controls: true,\n"
-        "  progress: true,\n"
-        "  center: false,\n"
-        "  hash: true,\n"
-        "  transition: 'slide',\n"
-        "  width: 1280,\n"
-        "  height: 720,\n"
-        "  margin: 0.08,\n"
-        "  minScale: 0.2,\n"
-        "  maxScale: 2.0,\n"
-        "});\n"
-        "// Re-render math after each slide is shown.\n"
-        "Reveal.on('slidechanged', function() {\n"
-        "  if (window.mdppRenderMathSafe) window.mdppRenderMathSafe();\n"
-        "  if (window.mdppRenderEcharts) window.mdppRenderEcharts();\n"
-        "});\n"
-        "if (window.mdppRenderMathSafe) window.mdppRenderMathSafe();\n"
-        "</script>\n"
+        "<script>%s</script>\n"
         "</body>\n"
         "</html>\n"
     ) % (
         title,
         inlined_css,
         katex_head,
-        slides_html,
-        katex_snippet,
-        reveal_js,
-        cache_loader,
-        extra_scripts,
+        sections,
+        _katex_rerender_snippet(enable_katex),
+        loader_js,
+        init_js,
+        _DECK_JS,
     )
     return html
