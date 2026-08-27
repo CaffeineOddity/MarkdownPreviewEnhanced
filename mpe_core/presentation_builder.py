@@ -23,7 +23,7 @@ _DECK_CSS = """
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--mdpp-bg);
+  background: var(--mdpp-surface-2);
   color: var(--mdpp-fg);
   font-family: var(--mdpp-font);
 }
@@ -32,17 +32,29 @@ html, body {
   inset: 0;
   overflow-y: auto;
   visibility: hidden;
-  background: var(--mdpp-bg);
+  padding: 30px 30px 54px;
+  /* soft stage around the white slide page */
+  background:
+    radial-gradient(1200px 500px at 50% -140px,
+                    rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0)),
+    var(--mdpp-surface-2);
+  box-sizing: border-box;
 }
 .mdpp-slide.active { visibility: visible; }
 .mdpp-slide > .markdown-body {
   box-sizing: border-box;
   max-width: 900px;
   margin: 0 auto;
-  padding: 52px 56px 110px;
+  padding: 52px 60px 96px;
   font-size: 16px;
   line-height: 1.65;
   text-align: left;
+  /* the white slide "page" floating on the stage */
+  background: var(--mdpp-bg);
+  border: 1px solid var(--mdpp-border-muted);
+  border-radius: 12px;
+  box-shadow: 0 10px 34px rgba(31, 35, 40, 0.14),
+              0 2px 8px rgba(31, 35, 40, 0.06);
 }
 /* first heading of each slide gets some breathing room back */
 .mdpp-slide > .markdown-body > :first-child { margin-top: 0 !important; }
@@ -97,7 +109,17 @@ html, body {
     position: static;
     visibility: visible;
     overflow: visible;
+    padding: 0;
+    background: none;
     page-break-after: always;
+  }
+  .mdpp-slide > .markdown-body {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    min-height: auto;
+    max-width: none;
+    padding: 20px;
   }
 }
 """
