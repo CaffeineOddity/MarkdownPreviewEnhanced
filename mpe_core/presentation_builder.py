@@ -38,7 +38,7 @@ html, body {
 }
 .mdpp-slide {
   position: fixed;
-  top: calc((100vh - 34px) / 2);
+  top: 50%;
   left: 50%;
   width: var(--mdpp-slide-w);
   height: var(--mdpp-slide-h);
@@ -50,6 +50,7 @@ html, body {
 .mdpp-slide > .markdown-body {
   box-sizing: border-box;
   width: 100%;
+  max-width: none;                 /* override preview.css 820px cap */
   height: 100%;
   padding: 56px 72px;
   font-size: 18px;
