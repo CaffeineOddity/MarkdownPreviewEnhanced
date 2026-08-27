@@ -37,11 +37,11 @@ html, body {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
+  width: var(--mdpp-slide-w);
+  height: var(--mdpp-slide-h);
   visibility: hidden;
   transform-origin: top left;
-  /* JS sets transform: scale(s) to fit the design canvas into viewport */
+  /* JS sets transform: scale(s) — s = vw/W so width always fills */
 }
 .mdpp-slide.active { visibility: visible; }
 .mdpp-slide > .markdown-body {
@@ -146,19 +146,16 @@ _DECK_JS = r"""
   var h = parseInt(location.hash.replace("#", ""), 10);
   var idx = isNaN(h) ? 0 : Math.max(0, Math.min(slides.length - 1, h - 1));
 
-  /* Fixed 16:9 design canvas fitted to viewport — PPT full-screen mode.
-     scale = min(vw/W, vh/H) so the canvas fills width; if the screen
-     is wider than 16:9 the excess is black bars (letterbox). */
+  /* Fill the entire viewport — no black bars. Scale by width only so
+     the slide always spans 100% of the screen width; if content is
+     taller than the viewport, the card scrolls internally. */
   var W = 1600, H = 900;
   function fit() {
     var vw = window.innerWidth, vh = window.innerHeight;
-    var s = Math.min(vw / W, vh / H);
+    var s = vw / W;
     s = Math.max(0.1, Math.min(s, 3));
-    var offsetX = (vw - W * s) / 2;
-    var offsetY = (vh - H * s) / 2;
     for (var k = 0; k < slides.length; k++) {
-      slides[k].style.transform =
-        "translate(" + offsetX + "px," + offsetY + "px) scale(" + s + ")";
+      slides[k].style.transform = "scale(" + s + ")";
     }
   }
   window.addEventListener("resize", fit);
