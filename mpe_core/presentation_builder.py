@@ -23,13 +23,13 @@ _DECK_CSS = """
 /* Every slide is a fixed 1280x720 canvas; JS computes a uniform
    transform:scale() so the canvas always fits the viewport and is
    centered on the stage. Content never changes slide geometry. */
-:root { --mdpp-slide-w: 1600px; --mdpp-slide-h: 100vh; }
+:root { --mdpp-slide-w: 1600px; --mdpp-slide-h: 900px; }
 html, body {
   margin: 0;
   padding: 0;
   height: 100%;
   overflow: hidden;
-  background: #000;
+  background: var(--mdpp-bg);
   color: var(--mdpp-fg);
   font-family: var(--mdpp-font);
 }
@@ -147,18 +147,19 @@ _DECK_JS = r"""
   var h = parseInt(location.hash.replace("#", ""), 10);
   var idx = isNaN(h) ? 0 : Math.max(0, Math.min(slides.length - 1, h - 1));
 
-  /* Fill the entire viewport width. The slide height tracks the
-     viewport so overflow-y scrolling inside .markdown-body always
-     reaches the bottom — no content trapped below the fold by a
-     fixed 900px canvas scaled beyond the screen. */
+  /* Fill the entire viewport — width AND height. Scale by width so the
+     slide spans 100% of screen width; set the design-canvas height to
+     vh/s so the scaled canvas exactly equals the viewport height too.
+     No black bars, and overflow-y scrolling still reaches the bottom. */
   var W = 1600;
   function fit() {
     var vw = window.innerWidth, vh = window.innerHeight;
     var s = vw / W;
     s = Math.max(0.1, Math.min(s, 3));
+    var designH = vh / s;  /* design-canvas height that maps to vh after scale */
     for (var k = 0; k < slides.length; k++) {
+      slides[k].style.height = designH + "px";
       slides[k].style.transform = "scale(" + s + ")";
-      slides[k].style.height = vh + "px";
     }
   }
   window.addEventListener("resize", fit);
