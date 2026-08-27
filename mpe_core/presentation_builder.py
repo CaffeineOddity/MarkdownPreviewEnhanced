@@ -23,7 +23,7 @@ _DECK_CSS = """
 /* Every slide is a fixed 1280x720 canvas; JS computes a uniform
    transform:scale() so the canvas always fits the viewport and is
    centered on the stage. Content never changes slide geometry. */
-:root { --mdpp-slide-w: 1600px; --mdpp-slide-h: 900px; }
+:root { --mdpp-slide-w: 1600px; --mdpp-slide-h: 100vh; }
 html, body {
   margin: 0;
   padding: 0;
@@ -42,6 +42,7 @@ html, body {
   visibility: hidden;
   transform-origin: top left;
   /* JS sets transform: scale(s) — s = vw/W so width always fills */
+  overflow: hidden;                 /* clip at canvas boundary */
 }
 .mdpp-slide.active { visibility: visible; }
 .mdpp-slide > .markdown-body {
@@ -57,7 +58,7 @@ html, body {
   border: none;
   border-radius: 0;
   box-shadow: none;
-  overflow-y: auto;                 /* keep deck geometry but allow scroll */
+  overflow-y: auto;                 /* scroll inside the fixed canvas */
   scrollbar-width: none;            /* Firefox: hide scrollbar */
 }
 .mdpp-slide > .markdown-body::-webkit-scrollbar {
@@ -146,16 +147,18 @@ _DECK_JS = r"""
   var h = parseInt(location.hash.replace("#", ""), 10);
   var idx = isNaN(h) ? 0 : Math.max(0, Math.min(slides.length - 1, h - 1));
 
-  /* Fill the entire viewport — no black bars. Scale by width only so
-     the slide always spans 100% of the screen width; if content is
-     taller than the viewport, the card scrolls internally. */
-  var W = 1600, H = 900;
+  /* Fill the entire viewport width. The slide height tracks the
+     viewport so overflow-y scrolling inside .markdown-body always
+     reaches the bottom — no content trapped below the fold by a
+     fixed 900px canvas scaled beyond the screen. */
+  var W = 1600;
   function fit() {
     var vw = window.innerWidth, vh = window.innerHeight;
     var s = vw / W;
     s = Math.max(0.1, Math.min(s, 3));
     for (var k = 0; k < slides.length; k++) {
       slides[k].style.transform = "scale(" + s + ")";
+      slides[k].style.height = vh + "px";
     }
   }
   window.addEventListener("resize", fit);
