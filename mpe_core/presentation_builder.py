@@ -29,22 +29,19 @@ html, body {
   padding: 0;
   height: 100%;
   overflow: hidden;
-  background:
-    radial-gradient(1200px 500px at 50% -140px,
-                    rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0)),
-    var(--mdpp-surface-2);
+  background: #000;
   color: var(--mdpp-fg);
   font-family: var(--mdpp-font);
 }
 .mdpp-slide {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  width: var(--mdpp-slide-w);
-  height: var(--mdpp-slide-h);
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   visibility: hidden;
-  transform-origin: center center;
-  /* JS sets transform: translate(-50%, -50%) scale(s) */
+  transform-origin: top left;
+  /* JS sets transform: scale(s) to fit the design canvas into viewport */
 }
 .mdpp-slide.active { visibility: visible; }
 .mdpp-slide > .markdown-body {
@@ -52,15 +49,14 @@ html, body {
   width: 100%;
   max-width: none;                 /* override preview.css 820px cap */
   height: 100%;
-  padding: 56px 72px;
-  font-size: 18px;
+  padding: 48px 64px;
+  font-size: 20px;
   line-height: 1.6;
   text-align: left;
   background: var(--mdpp-bg);
-  border: 1px solid var(--mdpp-border-muted);
-  border-radius: 10px;
-  box-shadow: 0 12px 38px rgba(31, 35, 40, 0.16),
-              0 3px 9px rgba(31, 35, 40, 0.07);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   overflow-y: auto;                 /* keep deck geometry but allow scroll */
   scrollbar-width: none;            /* Firefox: hide scrollbar */
 }
@@ -150,17 +146,19 @@ _DECK_JS = r"""
   var h = parseInt(location.hash.replace("#", ""), 10);
   var idx = isNaN(h) ? 0 : Math.max(0, Math.min(slides.length - 1, h - 1));
 
-  /* Fixed design canvas (matches --mdpp-slide-w/h) fitted into the
-     viewport with a uniform scale — the core reveal.js trick. */
+  /* Fixed 16:9 design canvas fitted to viewport — PPT full-screen mode.
+     scale = min(vw/W, vh/H) so the canvas fills width; if the screen
+     is wider than 16:9 the excess is black bars (letterbox). */
   var W = 1600, H = 900;
   function fit() {
-    var availW = window.innerWidth - 36;      /* stage margins */
-    var availH = window.innerHeight - 56;     /* keep clear of HUD/bar */
-    var s = Math.min(availW / W, availH / H);
-    s = Math.max(0.1, Math.min(s, 2));
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / W, vh / H);
+    s = Math.max(0.1, Math.min(s, 3));
+    var offsetX = (vw - W * s) / 2;
+    var offsetY = (vh - H * s) / 2;
     for (var k = 0; k < slides.length; k++) {
       slides[k].style.transform =
-        "translate(-50%, -50%) scale(" + s + ")";
+        "translate(" + offsetX + "px," + offsetY + "px) scale(" + s + ")";
     }
   }
   window.addEventListener("resize", fit);
