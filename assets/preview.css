@@ -57,7 +57,7 @@ body {
 
 .mdpp-has-toc .mdpp-wrap {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 240px;
   gap: 28px;
   max-width: 1180px;
   padding: 28px 24px 64px;

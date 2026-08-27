@@ -244,7 +244,7 @@ def _cache_first_scripts():
 
 
 def _preview_sidebar(toc_html, show_toc):
-    """左侧栏:预览 tab 列表在上,TOC 在下。"""
+    """右侧栏:TOC 在上,预览 tab 列表在下。"""
     tabs = (
         '<nav id="mdpp-tabs" class="mdpp-tabs" aria-label="Preview tabs">'
         '<div class="mdpp-tabs-title">Preview tabs</div>'
@@ -258,7 +258,7 @@ def _preview_sidebar(toc_html, show_toc):
             '<div id="mdpp-toc" class="mdpp-toc%s" aria-label="Table of contents">%s</div>'
             % (empty, toc_html)
         )
-    return '<aside class="mdpp-sidebar">%s%s</aside>' % (tabs, toc)
+    return '<aside class="mdpp-sidebar">%s%s</aside>' % (toc, tabs)
 
 
 def build_preview_shell(
@@ -349,8 +349,8 @@ def build_preview_shell(
         "</div>\n"
         "</div>\n"
         "<div class=\"mdpp-wrap\">\n"
-        "%s\n"
         "<main id=\"mdpp-content\" class=\"markdown-body\">%s</main>\n"
+        "%s\n"
         "</div>\n"
         "%s"
         "%s"
@@ -371,8 +371,8 @@ def build_preview_shell(
         cache_loader,
         layout_class,
         mode,
-        toc_block,
         body_html,
+        toc_block,
         mermaid_tag,
         echarts_tag,
         html2canvas_tag,
@@ -472,8 +472,8 @@ def build_export_html(
         "</head>\n"
         "<body class=\"%s\">\n"
         "<div class=\"mdpp-wrap\">\n"
-        "%s\n"
         "<main class=\"markdown-body\">%s</main>\n"
+        "%s\n"
         "</div>\n"
         "%s"
         "%s"
@@ -506,8 +506,8 @@ def build_export_html(
         css,
         hl_css,
         layout_class,
-        toc_block,
         body_html,
+        toc_block,
         mermaid_tag,
         echarts_tag,
         _katex_rerender_snippet(enable_katex),
