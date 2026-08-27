@@ -61,6 +61,10 @@ html, body {
   box-shadow: 0 12px 38px rgba(31, 35, 40, 0.16),
               0 3px 9px rgba(31, 35, 40, 0.07);
   overflow-y: auto;                 /* keep deck geometry but allow scroll */
+  scrollbar-width: none;            /* Firefox: hide scrollbar */
+}
+.mdpp-slide > .markdown-body::-webkit-scrollbar {
+  width: 0; height: 0; display: none;  /* Chrome/Safari: hide scrollbar */
 }
 /* first heading of each slide gets some breathing room back */
 .mdpp-slide > .markdown-body > :first-child { margin-top: 0 !important; }
