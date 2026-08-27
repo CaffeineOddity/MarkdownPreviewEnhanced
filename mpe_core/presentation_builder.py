@@ -1,8 +1,9 @@
 """Build a presentation (slide deck) page using the normal preview's own
 markdown rendering — no third-party framework.
 
-Slides are the already-rendered body_html split on ``<hr>`` (Markdown
-``---``).  Each slide is a plain ``.markdown-body`` page shown full screen,
+Slides are the already-rendered body_html split at every h1–h4 heading:
+each heading opens a new slide, and the content under it stays on that
+slide.  Each slide is a plain ``.markdown-body`` page shown full screen,
 one at a time.  Tables, code blocks, quotes, KaTeX, mermaid and echarts
 render *identically* to the live preview because the very same
 preview.css is inlined here.
@@ -164,15 +165,26 @@ _DECK_JS = r"""
 
 
 def _split_slides(body_html):
-    """Split rendered HTML into slide fragments on <hr> tags."""
-    parts = re.split(r"<hr\s*/?>", body_html, flags=re.IGNORECASE)
+    """Split rendered HTML into slides at every heading (h1–h4).
+
+    Each ``<h1>``…``<h4>`` opens a new slide; everything up to the next
+    heading belongs to that slide.  Content before the first heading
+    becomes its own opening slide.  A document without headings renders
+    as a single slide.  Markdown ``---`` still shows as a plain rule
+    inside a slide — it no longer breaks pages.
+    """
+    chunks = re.split(
+        r"(?i)(<h[1-4](?:\s[^>]*)?>)", body_html)
     slides = []
-    for p in parts:
-        stripped = p.strip()
-        if stripped:
-            slides.append(stripped)
+    # Leading content before the first heading (title blurb, lists …).
+    if chunks[0].strip():
+        slides.append(chunks[0].strip())
+    for i in range(1, len(chunks) - 1, 2):
+        tag = chunks[i]
+        content = chunks[i + 1].strip() if i + 1 < len(chunks) else ""
+        slides.append((tag + content).strip())
     if not slides:
-        slides = [body_html or "<p>No content</p>"]
+        slides = [body_html.strip() or "<p>No content</p>"]
     return slides
 
 
