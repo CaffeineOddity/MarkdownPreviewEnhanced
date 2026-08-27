@@ -323,6 +323,9 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/api/open_doc":
             self._api_open_doc(parsed.query)
             return
+        if path == "/presentation":
+            self._serve_presentation(parsed.query)
+            return
         if path.startswith("/doc/"):
             self._serve_doc(path[len("/doc/"):])
             return
@@ -440,6 +443,44 @@ class _Handler(BaseHTTPRequestHandler):
                 use_server=True,
                 title=os.path.basename(file_key or "preview"),
             )
+        data = html.encode("utf-8")
+        self.send_response(200)
+        self._cors()
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _serve_presentation(self, query):
+        """Serve a reveal.js slide deck built from the channel's body_html.
+
+        Waits up to 2s for rendered content (same as _serve_shell) so that
+        clicking the presentation button immediately after toggle still works.
+        """
+        from .presentation_builder import build_presentation
+
+        file_key = _file_key_from_query(query)
+        body_html = ""
+        deadline = time.time() + 2.0
+        while True:
+            with _STATE.lock:
+                ch = _STATE.channel(file_key)
+                body_html = ch.body_html
+            if body_html or time.time() >= deadline:
+                break
+            time.sleep(0.03)
+        if not body_html:
+            body_html = (
+                '<p style="color:#666;text-align:center">Rendering…</p>'
+            )
+        # Theme from query (?theme=black) defaults to white.
+        theme = "white"
+        q = unquote(query or "").strip()
+        for part in q.split("&"):
+            if part.startswith("theme="):
+                theme = part[len("theme="):] or "white"
+        title = os.path.basename(file_key) if file_key else "Presentation"
+        html = build_presentation(body_html, title=title, theme=theme)
         data = html.encode("utf-8")
         self.send_response(200)
         self._cors()

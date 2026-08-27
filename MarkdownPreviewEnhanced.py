@@ -487,6 +487,62 @@ class MarkdownPreviewEnhancedRefreshCommand(sublime_plugin.WindowCommand):
                 view, force=True, open_browser=not _preview_open)
 
 
+class MarkdownPreviewEnhancedPresentationCommand(sublime_plugin.WindowCommand):
+    """Open the current markdown as a reveal.js slide deck (presentation mode).
+
+    Renders the document first (so body_html is in the channel), then opens
+    ``/presentation?file=…`` in the browser.  Slides are split on ``---``.
+    """
+
+    def run(self):
+        view = self.window.active_view()
+        if view is None:
+            self.window.status_message("MarkdownPreviewEnhanced: no active view")
+            return
+        if not config.get("use_local_server", True):
+            sublime.error_message(
+                "Presentation mode requires the local server.\n"
+                "Enable \"use_local_server\" in settings.")
+            return
+
+        # Ensure the server is up so /presentation is reachable.
+        try:
+            _ensure_server()
+        except Exception as e:
+            log.error("ensure_server failed: %s" % e)
+            self.window.status_message("MarkdownPreviewEnhanced: server failed")
+            return
+
+        if not SERVER.running:
+            self.window.status_message("MarkdownPreviewEnhanced: server not running")
+            return
+
+        file_path = view.file_name() or ""
+
+        def _work():
+            try:
+                # Render so the channel has body_html ready for /presentation.
+                MarkdownPreviewEnhancedListener.render_view(
+                    view, force=True, open_browser=False)
+            except Exception:
+                log.error("presentation render failed:\n%s" % traceback.format_exc())
+
+            def _open():
+                from urllib.parse import quote as _quote
+                url = SERVER.base_url + "/presentation"
+                if file_path:
+                    url += "?file=" + _quote(file_path, safe="")
+                global _preview_open
+                _preview_open = True
+                _browser.open(url, focus_existing=False, log=_browser_log)
+                log.info("presentation: %s" % url)
+                self.window.status_message("MarkdownPreviewEnhanced: presentation opened")
+
+            sublime.set_timeout(_open, 0)
+
+        threading.Thread(target=_work, daemon=True).start()
+
+
 class MarkdownPreviewEnhancedExportHtmlCommand(sublime_plugin.WindowCommand):
     def run(self):
         view = self.window.active_view()

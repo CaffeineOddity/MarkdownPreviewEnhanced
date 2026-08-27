@@ -698,6 +698,15 @@
     if (el) el.hidden = false;
   };
 
+  // ── presentation mode ─────────────────────────────────────────────────
+
+  window.mdppOpenPresentation = function mdppOpenPresentation() {
+    // Reuse the current URL's ?file= param (or channelQuery) so the
+    // presentation page shows the same document.
+    var q = channelQuery || "";
+    window.open("/presentation" + q, "_blank");
+  };
+
   // ── init ─────────────────────────────────────────────────────────────
 
   window.mdppInit = function mdppInit() {

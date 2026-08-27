@@ -4,4 +4,5 @@
     { "keys": ["super+shift+m"], "command": "markdown_preview_enhanced_toggle" },
     { "keys": ["super+shift+alt+m"], "command": "markdown_preview_enhanced_close" },
     { "keys": ["super+shift+e"], "command": "markdown_preview_enhanced_export_html" },
+    { "keys": ["super+shift+p"], "command": "markdown_preview_enhanced_presentation" },
 ]
