@@ -19,6 +19,20 @@ _THEME_WHITE = "assets/reveal/theme-white.css"
 # margin: auto }`` centers tables — both unwanted here).
 _PRESENTATION_CSS = """
 /* ── presentation overrides (document style, left-aligned) ────────── */
+/* Kill theme quirks that fight the markdown rendering: 42px base with
+   uppercase headings, oversized em-based sizes, double-shrunk code, and
+   the theme's pre shadow / max-height clip. Typography is pinned in px
+   against a fixed 1280x720 slide so proportions stay predictable. */
+.reveal {
+  --r-main-font-size: 30px;
+  --r-main-font: var(--mdpp-font);
+  --r-heading-font: var(--mdpp-font);
+  --r-code-font: var(--mdpp-mono);
+  --r-heading-text-transform: none;
+  --r-block-margin: 0.6em;
+  font-size: 30px;
+  line-height: 1.55;
+}
 .reveal .slides { text-align: left; }
 .reveal .markdown-body {
   background: transparent;
@@ -27,8 +41,11 @@ _PRESENTATION_CSS = """
   max-width: none;
   width: 100%;
   font-size: inherit;
-  line-height: 1.5;
 }
+.reveal h1 { font-size: 52px; text-transform: none; text-shadow: none; }
+.reveal h2 { font-size: 38px; text-transform: none; text-shadow: none; }
+.reveal h3 { font-size: 30px; text-transform: none; text-shadow: none; }
+.reveal h4, .reveal h5, .reveal h6 { font-size: 28px; }
 .reveal .markdown-body h1,
 .reveal .markdown-body h2,
 .reveal .markdown-body h3,
@@ -37,38 +54,48 @@ _PRESENTATION_CSS = """
 .reveal .markdown-body h6,
 .reveal .markdown-body p,
 .reveal .markdown-body li { text-align: left; }
+.reveal .markdown-body code {
+  /* inline code only — never shrink block code twice */
+  font-size: 0.85em;
+}
+.reveal .markdown-body :not(pre) > code { font-size: 0.85em; }
+.reveal pre {
+  display: block;
+  width: auto;
+  margin: 0.6em 0;
+  text-align: left;
+  font-size: 20px;
+  line-height: 1.5;
+  font-weight: normal;
+  box-shadow: var(--mdpp-shadow);
+}
+.reveal pre code {
+  padding: 0;
+  max-height: none;
+  font-size: 100%;
+}
+.reveal .markdown-body table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin: 0 0 1em;
+  overflow: auto;
+  font-size: 24px;
+}
+.reveal .markdown-body th,
+.reveal .markdown-body td { padding: 0.45em 0.7em; }
 .reveal ul, .reveal ol {
   display: block;
   text-align: left;
   margin: 0 0 0.6em 1.4em;
 }
-.reveal pre {
-  display: block;
-  width: 100%;
-  margin: 0.6em 0;
-  text-align: left;
-}
-.reveal .markdown-body pre { font-size: 0.55em; }
-.reveal .markdown-body code { font-size: 0.85em; }
-.reveal .markdown-body table {
-  display: block;
-  width: max-content;
-  max-width: 100%;
-  margin: 0 0 1.2em;
-  overflow: auto;
-  font-size: 0.7em;
-}
 .reveal .markdown-body img {
   border: none;
   box-shadow: none;
   max-width: 90%;
-  max-height: 70vh;
+  max-height: 60vh;
 }
-.reveal h1 { font-size: 2.2em; }
-.reveal h2 { font-size: 1.7em; }
-.reveal h3 { font-size: 1.35em; }
-.reveal .markdown-body p { font-size: 0.95em; line-height: 1.5; }
-.reveal .katex-display { font-size: 0.9em; margin: 0.5em 0; }
+.reveal .katex-display { font-size: 1em; margin: 0.5em 0; }
 .reveal pre.mermaid, .reveal .mermaid-svg { max-width: 90%; margin: 0.5em 0; }
 """
 
