@@ -347,31 +347,43 @@
       announceLeaderGone();
       disconnectStream();
     });
-    // visibilitychange:用户切回这个预览标签时通知服务器切 ST 文档
+    // 用户切到这个预览标签(浏览器顶部 tab 栏)时,通知服务器切 ST 文档。
+    // visibilitychange 在跨标签切换时会触发;window.focus 是补充信号,
+    // 覆盖某些浏览器/场景下 visibilitychange 不触发的情况。
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
     publishTabHello(false);
   }
 
   // 无 BroadcastChannel 时退回「仅可见 tab 持有 SSE」
   // 有 BroadcastChannel 时也监听 visibilitychange:用户切回一个已有的
   // 预览标签时,通知服务器切换 ST 到对应文档(单向 ST←browser doc switch)。
+  function notifyDocSwitch() {
+    if (cfg.mode === "server" && channelFile) {
+      fetch("/api/open_doc?file=" + encodeURIComponent(channelFile),
+            { cache: "no-store" }).catch(function () {});
+    }
+  }
+
   function onVisibilityChange() {
     if (document.hidden) {
       disconnectStream();
     } else {
       connectStream();
-      // 通知服务器:用户切到了这个文档的预览标签,ST 也应切到它
-      if (cfg.mode === "server" && channelFile) {
-        fetch("/api/open_doc?file=" + encodeURIComponent(channelFile),
-              { cache: "no-store" }).catch(function () {});
-      }
+      notifyDocSwitch();
     }
+  }
+
+  function onFocus() {
+    // window focus 是切回标签的补充信号(某些浏览器不触发 visibilitychange)
+    notifyDocSwitch();
   }
 
   function bindVisibility() {
     if (bindVisibility._bound) return;
     bindVisibility._bound = true;
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
     window.addEventListener("beforeunload", function () {
       if (es) { es.close(); es = null; }
     });
