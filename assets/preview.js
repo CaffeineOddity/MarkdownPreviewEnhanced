@@ -360,12 +360,19 @@
   // 预览标签时,通知服务器切换 ST 到对应文档(单向 ST←browser doc switch)。
   function notifyDocSwitch() {
     if (cfg.mode === "server" && channelFile) {
-      fetch("/api/open_doc?file=" + encodeURIComponent(channelFile),
-            { cache: "no-store" }).catch(function () {});
+      console.log("[MDPP] notifyDocSwitch file=" + channelFile);
+      fetch("/api/open_doc?file=" + encodeURIComponent(channelFile)
+            + "&tab_switch=1",
+            { cache: "no-store" }).catch(function (e) {
+        console.log("[MDPP] notifyDocSwitch fetch error: " + e);
+      });
+    } else {
+      console.log("[MDPP] notifyDocSwitch skipped (mode=" + cfg.mode + " file=" + channelFile + ")");
     }
   }
 
   function onVisibilityChange() {
+    console.log("[MDPP] visibilitychange hidden=" + document.hidden + " file=" + channelFile);
     if (document.hidden) {
       disconnectStream();
     } else {
@@ -375,7 +382,7 @@
   }
 
   function onFocus() {
-    // window focus 是切回标签的补充信号(某些浏览器不触发 visibilitychange)
+    console.log("[MDPP] window focus file=" + channelFile);
     notifyDocSwitch();
   }
 

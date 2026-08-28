@@ -345,7 +345,8 @@ class PreviewConnectionTests(unittest.TestCase):
                 self.assertEqual(headers.get("connection", "").lower(), "close")
             finally:
                 sock.close()
-            self.assertEqual(pop_open_docs(), [path])
+            self.assertEqual(pop_open_docs(),
+                             [{"path": path, "focus_browser": True}])
         finally:
             os.remove(path)
 

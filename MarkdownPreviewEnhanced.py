@@ -326,10 +326,14 @@ def _focus_existing_preview(file_path):
     threading.Thread(target=_work, daemon=True).start()
 
 
-def _open_doc_from_browser(path):
-    """浏览器里点了其它 .md 链接时,在编辑器打开并预览.
+def _open_doc_from_browser(path, focus_browser=True):
+    """浏览器侧通知:用户切到了某个文档的预览标签,ST 也应切到它.
 
-    预览 tab 由浏览器侧复用/新开,插件这边只聚焦已有 tab,不再 webbrowser.open.
+    focus_browser=True (默认): 同时让浏览器聚焦对应预览标签
+      — 用于侧栏 preview-tabs 点击场景。
+    focus_browser=False: 只切 ST 编辑器,不回弹浏览器标签
+      — 用于浏览器原生 tab 切换场景(visibilitychange/focus),
+      否则会和浏览器 tab 切换互相死循环。
     """
     window = sublime.active_window()
     for v in window.views():
@@ -337,7 +341,8 @@ def _open_doc_from_browser(path):
             window.focus_view(v)
             MarkdownPreviewEnhancedListener.render_view(
                 v, force=True, open_browser=False)
-            _focus_existing_preview(path)
+            if focus_browser:
+                _focus_existing_preview(path)
             return
     _pending_link_opens.add(path)
     window.open_file(path)
@@ -405,10 +410,13 @@ def _start_scroll_poller():
         try:
             docs = pop_open_docs()
             if docs:
-                for path in docs:
-                    log.debug("open doc from browser link: %s" % path)
+                items = [(d["path"], d.get("focus_browser", True)) for d in docs]
+                for path, fb in items:
+                    log.debug("open doc from browser link: %s (focus_browser=%s)"
+                              % (path, fb))
                 sublime.set_timeout(
-                    lambda: [_open_doc_from_browser(p) for p in docs], 0
+                    lambda: [_open_doc_from_browser(p, focus_browser=fb)
+                             for p, fb in items], 0
                 )
         except Exception:
             pass

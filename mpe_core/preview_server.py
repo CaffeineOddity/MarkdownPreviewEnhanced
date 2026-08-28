@@ -10,7 +10,7 @@ import time
 import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlparse, parse_qs
 
 from . import assets as pkg_assets
 
@@ -144,6 +144,14 @@ def _file_key_from_query(query):
     q = unquote(query or "").strip()
     if not q:
         return ""
+    # Use parse_qs so extra params (e.g. tab_switch=1) don't pollute the path
+    try:
+        params = parse_qs(q)
+        if "file" in params and params["file"]:
+            return params["file"][0]
+    except Exception:
+        pass
+    # Fallback: strip prefix manually (for non-standard query formats)
     for prefix in ("file://", "file="):
         if q.startswith(prefix):
             q = q[len(prefix):]
@@ -227,11 +235,22 @@ def set_output_dir(path):
         _STATE.output_dir = path
 
 
-def queue_open_doc(path):
-    """Queue an absolute .md path for the plugin to open as a standard preview."""
+def queue_open_doc(path, focus_browser=True):
+    """Queue an absolute .md path for the plugin to open as a standard preview.
+
+    focus_browser=False marks a request as "tab switch only" — the plugin
+    should focus the ST editor but NOT bounce the browser tab back (which
+    would cause a focus loop with native tab switching).
+    """
     with _STATE.lock:
-        if path not in _STATE.pending_open_docs:
-            _STATE.pending_open_docs.append(path)
+        for item in _STATE.pending_open_docs:
+            if item["path"] == path:
+                # Already queued; keep the more permissive flag
+                if focus_browser:
+                    item["focus_browser"] = True
+                return
+        _STATE.pending_open_docs.append(
+            {"path": path, "focus_browser": focus_browser})
 
 
 def pop_open_docs():
@@ -455,7 +474,11 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _api_open_doc(self, query):
-        """预览 tab 列表点选:通知插件聚焦对应编辑器,不新开浏览器页。"""
+        """预览 tab 列表点选 / 浏览器 tab 切换:通知插件聚焦对应编辑器.
+
+        ?tab_switch=1 表示是浏览器原生 tab 切换,插件不应回弹浏览器标签
+        (否则和 tab 切换互相死循环)。
+        """
         file_key = _file_key_from_query(query)
         if (
             not file_key
@@ -464,7 +487,9 @@ class _Handler(BaseHTTPRequestHandler):
         ):
             self.send_error(400, "invalid file")
             return
-        queue_open_doc(file_key)
+        params = parse_qs(query)
+        tab_switch = params.get("tab_switch", ["0"])[0] == "1"
+        queue_open_doc(file_key, focus_browser=not tab_switch)
         self.send_response(204)
         self._cors()
         self.end_headers()
