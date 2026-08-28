@@ -11,7 +11,7 @@ preview.css is inlined here.
 import re
 
 from . import assets as pkg_assets
-from .html_builder import _katex_rerender_snippet
+from .html_builder import _katex_rerender_snippet, _favicon_tag
 
 
 # Full-screen deck chrome: one .mdpp-slide per viewport, a thin progress
@@ -318,6 +318,7 @@ def build_presentation(body_html, title="Presentation", enable_katex=True):
         "<meta name=\"viewport\" content=\"width=device-width, "
         "initial-scale=1\">\n"
         "<title>%s</title>\n"
+        "%s"
         "<style>\n%s\n</style>\n"
         "%s"
         "</head>\n"
@@ -340,6 +341,7 @@ def build_presentation(body_html, title="Presentation", enable_katex=True):
         "</html>\n"
     ) % (
         title,
+        _favicon_tag("", True),
         inlined_css,
         katex_head,
         sections,
