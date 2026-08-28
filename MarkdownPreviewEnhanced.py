@@ -38,7 +38,7 @@ _MARKDOWN_SCOPE = "text.html.markdown"
 _preview_open = False
 _browser = BrowserSession()
 _bound_view_id = None
-_last_browser_seqs = {}  # 频道 -> 已处理的 browser_line 序号
+_last_browser_seqs = {}  # kept for compatibility but unused — browser→ST scroll disabled
 _bound_views = {}  # 频道(文档路径) -> view.id()
 _scroll_timer = None
 _sse_dead_since = None   # timestamp when SSE connection first went missing
@@ -389,17 +389,16 @@ def _start_scroll_poller():
             except Exception:
                 pass
 
-        if config.get("scroll_sync", True):
-            try:
-                for channel_key, line, seq in pop_browser_lines():
-                    if seq > _last_browser_seqs.get(channel_key, 0) and line > 0:
-                        _last_browser_seqs[channel_key] = seq
-                        view_id = _bound_views.get(channel_key)
-                        sublime.set_timeout(
-                            lambda l=line, v=view_id: _scroll_editor_to_line(l, v), 0
-                        )
-            except Exception:
-                pass
+        # Scroll sync is unidirectional: ST → browser only.
+        # Browser → ST scroll (pop_browser_lines) is disabled entirely to
+        # prevent the editor cursor from jumping while the user is reading
+        # or editing.  on_selection_modified_async still pushes ST cursor
+        # position to the browser at all times.
+        # We still drain browser scroll reports so they don't pile up.
+        try:
+            pop_browser_lines()
+        except Exception:
+            pass
 
         # 浏览器里点击 .md 链接 -> 以标准预览流程打开该文件
         # (sublime API 仅限主线程,tick 是后台线程,必须 set_timeout 切换)
