@@ -4,6 +4,12 @@
 
   var cfg = window.MDPP_CONFIG || { mode: "file", scrollSync: true, showToc: true };
 
+  function ts() {
+    var d = new Date();
+    return d.getHours() + ":" + d.getMinutes() + ":" + d.getSeconds() + "." +
+      ("00" + d.getMilliseconds()).slice(-3);
+  }
+
   // 频道标识:地址栏 ?file= 参数,决定 SSE/滚动上报归属哪个文档
   var channelFile = "";
   try {
@@ -31,6 +37,7 @@
   var lastContent = {};   // file -> last content payload (leader 补给晚到的 tab)
   var lastEditor = {};    // file -> last editorLine payload
   var openTabs = {};      // tabId -> {file, title}
+  var _latestFocusClaim = { id: null, t: 0 };  // newest focus-claim seen
   try {
     if (typeof BroadcastChannel === "function") {
       bc = new BroadcastChannel("mdpp-preview-sse");
@@ -124,9 +131,14 @@
   }
 
   function handleSseEvent(name, data) {
+    console.log(ts() + " [MDPP] handleSseEvent name=%s file=%s tabFile=%s",
+                name, data && data.file, channelFile);
     rememberPayload(name, data);
     if (name === "content") {
-      if (!eventMatchesTab(data)) return;
+      if (!eventMatchesTab(data)) {
+        console.log(ts() + " [MDPP] content ignored (file mismatch)");
+        return;
+      }
       applyContent(data);
       return;
     }
@@ -141,6 +153,22 @@
     if (name === "close") {
       if (data && data.file && data.file !== channelFile) return;
       window.close();
+    }
+    if (name === "switchTab") {
+      console.log(ts() + " [MDPP] switchTab received file=" + (data && data.file) + " tabFile=" + channelFile);
+      if (!data || data.file === channelFile) {
+        try {
+          // ST->WEB sync: bring this tab to front. Loop prevention lives on
+          // the ST side (direction guard in open_doc_from_browser) - this
+          // tab may still get a manual hasFocus change which SHOULD notify.
+          var w = window.open("", windowNameFor(channelFile));
+          console.log(ts() + " [MDPP] switchTab window.open result=" + (w ? "ok" : "null"));
+          if (w) { try { w.focus(); } catch (err) {} }
+        } catch (err) {
+          console.log(ts() + " [MDPP] switchTab window.open error: " + err);
+        }
+      }
+      return;
     }
   }
 
@@ -166,6 +194,13 @@
       try { data = parseEventData(e.data); } catch (err) {}
       bcSend({ type: "sse", event: "close", data: data });
       handleSseEvent("close", data);
+    });
+    stream.addEventListener("switchTab", function (e) {
+      try {
+        var data = parseEventData(e.data);
+        handleSseEvent("switchTab", data);
+        bcSend({ type: "sse", event: "switchTab", data: data });
+      } catch (err) {}
     });
     stream.addEventListener("ping", function () {
       if (isLeader) bcSend({ type: "leader-hello", id: tabId });
@@ -274,6 +309,15 @@
       publishTabHello(true);
       return;
     }
+    if (msg.type === "focus-claim") {
+      // Tab-switch arbitration: remember the latest focus claim from any tab.
+      // document.hasFocus() is unreliable with DevTools (multiple tabs report
+      // true), so we use window focus events + timestamps to pick the real one.
+      if (msg.t && msg.t > _latestFocusClaim.t) {
+        _latestFocusClaim = { id: msg.id, t: msg.t };
+      }
+      return;
+    }
     if (msg.type === "need-snapshot" && isLeader) {
       var f = typeof msg.file === "string" ? msg.file : "";
       if (lastContent[f]) {
@@ -348,31 +392,52 @@
       disconnectStream();
     });
     // 用户切到这个预览标签(浏览器顶部 tab 栏)时,通知服务器切 ST 文档。
-    // visibilitychange 在跨标签切换时会触发;window.focus 是补充信号,
-    // 覆盖某些浏览器/场景下 visibilitychange 不触发的情况。
+    // 只用 visibilitychange:它只在 tab 真正从 hidden->visible 时触发,
+    // 不会像 window.focus 那样在被切走的 tab 上也误触发。
     document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("focus", onFocus);
+    // Tab-switch detection via window focus + BC timestamp arbitration.
+    // document.hasFocus() is unreliable with DevTools open (multiple tabs
+    // report true), and visibilitychange doesn't fire either. So every tab
+    // broadcasts a focus-claim on window focus; after a short delay only the
+    // tab with the newest claim notifies ST.
+    window.addEventListener("focus", onWindowFocus);
+    console.log(ts() + " [MDPP] bindBroadcast done, focus arbitration armed file=" + channelFile);
     publishTabHello(false);
   }
 
   // 无 BroadcastChannel 时退回「仅可见 tab 持有 SSE」
   // 有 BroadcastChannel 时也监听 visibilitychange:用户切回一个已有的
   // 预览标签时,通知服务器切换 ST 到对应文档(单向 ST←browser doc switch)。
+  // ── doc switch notification (browser tab → ST) ──────────────────────
+  // When the user switches to a preview tab via the browser's tab bar,
+  // notify the server so ST focuses the matching editor view.
+  // We throttle + deduplicate to avoid loops (ST render → SSE push →
+  // DOM update → spurious focus event → another notification).
+
+  var _lastNotifyFile = "";
+  var _lastNotifyTime = 0;
+
   function notifyDocSwitch() {
-    if (cfg.mode === "server" && channelFile) {
-      console.log("[MDPP] notifyDocSwitch file=" + channelFile);
-      fetch("/api/open_doc?file=" + encodeURIComponent(channelFile)
-            + "&tab_switch=1",
-            { cache: "no-store" }).catch(function (e) {
-        console.log("[MDPP] notifyDocSwitch fetch error: " + e);
-      });
-    } else {
-      console.log("[MDPP] notifyDocSwitch skipped (mode=" + cfg.mode + " file=" + channelFile + ")");
+    if (cfg.mode !== "server" || !channelFile) {
+      return;
     }
+    // Deduplicate: don't notify for the same file within 3 seconds
+    var now = Date.now();
+    if (channelFile === _lastNotifyFile && (now - _lastNotifyTime) < 3000) {
+      return;
+    }
+    _lastNotifyFile = channelFile;
+    _lastNotifyTime = now;
+    console.log(ts() + " [MDPP] notifyDocSwitch file=" + channelFile);
+    fetch("/api/open_doc?file=" + encodeURIComponent(channelFile)
+          + "&tab_switch=1",
+          { cache: "no-store" }).catch(function (e) {
+      console.log(ts() + " [MDPP] notifyDocSwitch fetch error: " + e);
+    });
   }
 
   function onVisibilityChange() {
-    console.log("[MDPP] visibilitychange hidden=" + document.hidden + " file=" + channelFile);
+    console.log(ts() + " [MDPP] visibilitychange hidden=" + document.hidden + " file=" + channelFile);
     if (document.hidden) {
       disconnectStream();
     } else {
@@ -381,16 +446,27 @@
     }
   }
 
-  function onFocus() {
-    console.log("[MDPP] window focus file=" + channelFile);
-    notifyDocSwitch();
+  // Window focus fires on BOTH tabs when switching (Chrome quirk with
+  // DevTools). Broadcast a timestamped claim; after 150ms only the tab with
+  // the newest claim (i.e. the one the user actually switched TO) notifies.
+  function onWindowFocus() {
+    var myT = Date.now();
+    bcSend({ type: "focus-claim", id: tabId, t: myT });
+    setTimeout(function () {
+      if (myT > _latestFocusClaim.t) {
+        console.log(ts() + " [MDPP] focus arbitration won file=" + channelFile);
+        notifyDocSwitch();
+      } else {
+        console.log(ts() + " [MDPP] focus arbitration lost (newer claim) file=" + channelFile);
+      }
+    }, 150);
   }
+
 
   function bindVisibility() {
     if (bindVisibility._bound) return;
     bindVisibility._bound = true;
     document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("focus", onFocus);
     window.addEventListener("beforeunload", function () {
       if (es) { es.close(); es = null; }
     });
@@ -729,6 +805,7 @@
   // ── init ─────────────────────────────────────────────────────────────
 
   window.mdppInit = function mdppInit() {
+    console.log(ts() + " [MDPP] mdppInit called, bc=" + (typeof BroadcastChannel !== "undefined") + " mode=" + cfg.mode + " file=" + channelFile);
     restoreScroll();
     callRenderMath();
     bindTabList();

@@ -330,8 +330,8 @@ class PreviewConnectionTests(unittest.TestCase):
             self.assertTrue(status2.startswith("HTTP/1.1 304"), status2)
         finally:
             sock2.close()
-            from mpe_core import preview_server as ps
-            ps._ASSET_MEM.clear()
+            from mpe_core import preview_handler as ph
+            ph._ASSET_MEM.clear()
 
     def test_open_doc_queues_path(self):
         fd, path = tempfile.mkstemp(suffix=".md")
@@ -352,35 +352,24 @@ class PreviewConnectionTests(unittest.TestCase):
 
 
 class PreviewTabHintTests(unittest.TestCase):
-    def test_hints_cover_encoded_and_decoded_file_query(self):
-        from mpe_core.browser import _as_url_matches, _preview_match_hints
+    def test_url_hint_strips_scheme(self):
+        from mpe_core.browser import _url_hint
 
-        encoded = "http://127.0.0.1:8765/?file=%2Ftmp%2Falpha.md"
-        decoded = "http://127.0.0.1:8765/?file=/tmp/alpha.md"
-        for url in (encoded, decoded):
-            hints = _preview_match_hints(url)
-            self.assertTrue(
-                any(h.endswith("/?file=%2Ftmp%2Falpha.md") for h in hints), hints)
-            self.assertTrue(
-                any(h.endswith("/?file=/tmp/alpha.md") for h in hints), hints)
-            expr = _as_url_matches(hints)
-            self.assertIn(" or ", expr)
-            self.assertIn("%2Ftmp%2Falpha.md", expr)
-            self.assertIn("/tmp/alpha.md", expr)
+        self.assertEqual(
+            _url_hint("http://127.0.0.1:8765/?file=/tmp/alpha.md"),
+            "127.0.0.1:8765/?file=/tmp/alpha.md")
+        self.assertEqual(
+            _url_hint("file:///tmp/alpha.md"),
+            "/tmp/alpha.md")
 
-    def test_focus_only_script_does_not_open_tab(self):
-        from mpe_core.browser import BrowserSession, _preview_match_hints
+    def test_open_prefers_default_browser(self):
+        from mpe_core.browser import BrowserSession
 
-        url = "http://127.0.0.1:8765/?file=%2Ftmp%2Falpha.md"
-        hints = _preview_match_hints(url)
         session = BrowserSession()
-        script = session._chrome_focus_or_open_script(
-            "Google Chrome", url, hints, False)
-        self.assertNotIn("make new tab", script)
-        self.assertIn("if found then activate", script)
-        script_open = session._chrome_focus_or_open_script(
-            "Google Chrome", url, hints, True)
-        self.assertIn("make new tab", script_open)
+        # 'default' path uses webbrowser.open without OS-specific scripting.
+        self.assertTrue(hasattr(session, "open"))
+        self.assertIsNone(session.app_name)
+        self.assertIsNone(session.proc)
 
 
 if __name__ == "__main__":
