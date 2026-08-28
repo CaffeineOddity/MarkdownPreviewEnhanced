@@ -347,15 +347,24 @@
       announceLeaderGone();
       disconnectStream();
     });
+    // visibilitychange:用户切回这个预览标签时通知服务器切 ST 文档
+    document.addEventListener("visibilitychange", onVisibilityChange);
     publishTabHello(false);
   }
 
   // 无 BroadcastChannel 时退回「仅可见 tab 持有 SSE」
+  // 有 BroadcastChannel 时也监听 visibilitychange:用户切回一个已有的
+  // 预览标签时,通知服务器切换 ST 到对应文档(单向 ST←browser doc switch)。
   function onVisibilityChange() {
     if (document.hidden) {
       disconnectStream();
     } else {
       connectStream();
+      // 通知服务器:用户切到了这个文档的预览标签,ST 也应切到它
+      if (cfg.mode === "server" && channelFile) {
+        fetch("/api/open_doc?file=" + encodeURIComponent(channelFile),
+              { cache: "no-store" }).catch(function () {});
+      }
     }
   }
 
