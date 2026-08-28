@@ -32,7 +32,7 @@ if "sublime" not in sys.modules:
 
 from mpe_core.preview_server import (  # noqa: E402
     PreviewServer,
-    has_sse_clients,
+    has_active_sse_connection,
     pop_open_docs,
     state,
     update_content,
@@ -161,13 +161,13 @@ class PreviewConnectionTests(unittest.TestCase):
         try:
             _http_get(sock, "/api/stream", extra_headers="Accept: text/event-stream\r\n")
             _recv_until_headers(sock, timeout=2)
-            self.assertTrue(has_sse_clients())
+            self.assertTrue(has_active_sse_connection())
         finally:
             sock.close()
         deadline = time.time() + 7
-        while time.time() < deadline and has_sse_clients():
+        while time.time() < deadline and has_active_sse_connection():
             time.sleep(0.2)
-        self.assertFalse(has_sse_clients(), "SSE thread leaked after client disconnect")
+        self.assertFalse(has_active_sse_connection(), "SSE thread leaked after client disconnect")
 
     def test_short_post_not_blocked_by_open_sse(self):
         streams = []
@@ -238,7 +238,7 @@ class PreviewConnectionTests(unittest.TestCase):
         try:
             _http_get(sock, "/api/stream", extra_headers="Accept: text/event-stream\r\n")
             _recv_until_headers(sock, timeout=2)
-            self.assertTrue(has_sse_clients())
+            self.assertTrue(has_active_sse_connection())
         finally:
             sock.close()
 

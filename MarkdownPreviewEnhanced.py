@@ -24,10 +24,9 @@ from .mpe_core.html_builder import build_preview_shell
 from .mpe_core.md_renderer import render as render_markdown
 from .mpe_core.preview_server import (
     SERVER,
-    seconds_since_activity,
     pop_open_docs,
     pop_browser_lines,
-    has_sse_clients,
+    has_active_sse_connection,
     set_editor_line,
     set_output_dir,
     update_content,
@@ -42,6 +41,8 @@ _bound_view_id = None
 _last_browser_seqs = {}  # 频道 -> 已处理的 browser_line 序号
 _bound_views = {}  # 频道(文档路径) -> view.id()
 _scroll_timer = None
+_sse_dead_since = None   # timestamp when SSE connection first went missing
+SSE_IDLE_SECONDS = 10    # stop server after this many seconds with no SSE
 # 最近一次打开浏览器标签的时间;SSE 连接有建立延迟,宽限期内不判死
 _last_browser_open = 0.0
 # 浏览器链接点击后等待 on_load_async 渲染的文件
@@ -154,7 +155,7 @@ def _preview_alive():
         log.debug("preview flag was set but server is down; treating as closed")
         _preview_open = False
         return False
-    if config.get("use_local_server", True) and not has_sse_clients():
+    if config.get("use_local_server", True) and not has_active_sse_connection():
         age = time.time() - _last_browser_open
         if age > 3:
             log.debug("no preview page connected via SSE; treating as closed")
@@ -184,11 +185,13 @@ def _stop_server():
             log.error("server stop failed: %s" % e)
 
 
-def _close_preview_ui(stop_server=True):
+def _close_preview_ui(stop_server=False):
     """Close browser window and optionally stop the local server.
 
-    stop_server=True (default): free the port — used on Close / Toggle-off /
-    idle timeout / plugin unload. Pass False only if you need a brief restart.
+    stop_server=False (default): close the browser tab(s) but keep the
+    HTTP server running — it will be stopped by the idle poller when the
+    SSE connection stays gone for SSE_IDLE_SECONDS. Pass True only on
+    plugin_unloaded (ST exit must release the port immediately).
     """
     global _preview_open
     hint = None
@@ -292,7 +295,7 @@ def _publish(result, view, force_open=False):
 
     _write_files(shell, body)
 
-    sse_live = has_sse_clients()
+    sse_live = has_active_sse_connection()
     if force_open or not _preview_open:
         file_path = view.file_name() if view is not None else None
         url = _preview_url(file_path)
@@ -341,12 +344,12 @@ def _open_doc_from_browser(path):
 
 
 def _start_scroll_poller():
-    """Background tick: scroll-sync + optional idle server shutdown.
+    """Background tick: scroll-sync + SSE-driven server shutdown.
 
-    Browser JS polls every ~400ms while the tab is open. If the user closes the
-    tab/window without using the plugin command, requests stop and we free the
-    port after ``server_idle_seconds`` (default 0 = keep server alive for the
-    Sublime session so /doc/ links keep working).
+    Polls every ~400ms. The HTTP server stays alive as long as the
+    leader tab's SSE connection is open. When SSE goes away (all preview
+    tabs closed), we wait SSE_IDLE_SECONDS before stopping the server —
+    giving the user a grace window to refresh the URL or reopen a tab.
     """
     global _scroll_timer
     if not config.get("use_local_server", True):
@@ -356,26 +359,33 @@ def _start_scroll_poller():
 
     def _tick():
         global _scroll_timer, _last_browser_seq, _preview_open
+        global _sse_dead_since
         _scroll_timer = None
         if not _preview_open:
             return
 
-        # Auto-stop server when browser tab is gone (no HTTP activity).
-        # Default 0 = server stays up for the Sublime session so /doc/ links
-        # keep working after the preview tab is closed.
-        idle_limit = float(config.get("server_idle_seconds", 0) or 0)
-        if idle_limit > 0 and SERVER.running:
+        # ── SSE-driven server shutdown ──────────────────────────────
+        # The leader tab holds the only SSE connection. When it's gone
+        # and no follower re-elects within the grace window, all preview
+        # tabs are dead → stop the HTTP server.
+        if SERVER.running:
             try:
-                idle = seconds_since_activity()
-                if idle >= idle_limit:
-                    log.info(
-                        "no client activity for %.0fs — stopping preview server"
-                        % idle
-                    )
-                    # Don't try to close browser (already gone); just free port.
-                    _preview_open = False
-                    _stop_server()
-                    return
+                if has_active_sse_connection():
+                    _sse_dead_since = None  # SSE alive → reset timer
+                else:
+                    now = time.time()
+                    if _sse_dead_since is None:
+                        _sse_dead_since = now
+                        log.info("SSE connection gone — starting %ds idle timer"
+                                 % SSE_IDLE_SECONDS)
+                    elapsed = now - _sse_dead_since
+                    if elapsed >= SSE_IDLE_SECONDS:
+                        log.info("no SSE for %.0fs — stopping preview server"
+                                 % elapsed)
+                        _preview_open = False
+                        _sse_dead_since = None
+                        _stop_server()
+                        return
             except Exception:
                 pass
 
@@ -466,7 +476,7 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
         # BrowserSession.open(focus_existing=True) 聚焦,没有则新开.
         log.debug(
             "toggle: open preview (sse=%s preview_open=%s)"
-            % (has_sse_clients(), _preview_open)
+            % (has_active_sse_connection(), _preview_open)
         )
         self.window.status_message("MarkdownPreviewEnhanced: opening preview…")
         MarkdownPreviewEnhancedListener.render_view(
@@ -475,8 +485,8 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
 
 class MarkdownPreviewEnhancedCloseCommand(sublime_plugin.WindowCommand):
     def run(self):
-        _close_preview_ui(stop_server=True)
-        self.window.status_message("MarkdownPreviewEnhanced: preview closed (server stopped)")
+        _close_preview_ui(stop_server=False)
+        self.window.status_message("MarkdownPreviewEnhanced: preview closed (server stops when idle)")
 
 
 class MarkdownPreviewEnhancedRefreshCommand(sublime_plugin.WindowCommand):
@@ -649,7 +659,7 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
                 try:
                     # 正文推送默认不新开标签.仅当用户要求打开、SSE 已断、
                     # 且不在「刚 open 等连上」宽限内时才补开.
-                    sse_live = has_sse_clients()
+                    sse_live = has_active_sse_connection()
                     awaiting = _preview_alive()
                     need_open = (open_browser and not sse_live and not awaiting) or focus_browser
                     if open_browser and not sse_live and awaiting:

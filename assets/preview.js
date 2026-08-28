@@ -171,7 +171,7 @@
       if (isLeader) bcSend({ type: "leader-hello", id: tabId });
     });
     // EventSource 在 CONNECTING 时也会打 error.这里若 es.close(),
-    // 握手中的连接会被掐掉,之后 has_sse_clients 一直是 False,
+    // 握手中的连接会被掐掉,之后 has_active_sse_connection 一直是 False,
     // Toggle 每次都当死标签再开一页.
     stream.onerror = function () {
       if (!stream || stream !== es) return;

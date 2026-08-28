@@ -242,8 +242,14 @@ def pop_open_docs():
         return docs
 
 
-def has_sse_clients():
-    """True if at least one preview page holds an SSE connection open."""
+def has_active_sse_connection():
+    """True if the leader tab's SSE connection is still open.
+
+    Due to the leader-election design (see preview.js), the entire
+    browser session shares a single EventSource to /api/stream. This
+    function returns True when that one connection exists, meaning at
+    least one preview tab is alive.
+    """
     with _STATE.lock:
         if _STATE.global_sse_queues:
             return True
