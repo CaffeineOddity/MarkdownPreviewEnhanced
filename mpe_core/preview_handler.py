@@ -113,6 +113,9 @@ class PreviewHandler(BaseHTTPRequestHandler):
         if path == "/api/tab_close":
             self._api_tab_close(parsed.query)
             return
+        if path == "/presentation":
+            self._serve_presentation(parsed.query)
+            return
         if path.startswith("/doc/"):
             self._serve_doc(path[len("/doc/"):])
             return
@@ -232,6 +235,34 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 use_server=True,
                 title=os.path.basename(file_key or "preview"),
             )
+        data = html.encode("utf-8")
+        self.send_response(200)
+        self._cors()
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _serve_presentation(self, query):
+        """Serve a slide deck from the channel body_html. Wait up to 2s."""
+        from .presentation_builder import build_presentation
+
+        file_key = _core._file_key_from_query(query)
+        body_html = ""
+        deadline = time.time() + 2.0
+        while True:
+            with _core._STATE.lock:
+                ch = _core._STATE.channel(file_key)
+                body_html = ch.body_html
+            if body_html or time.time() >= deadline:
+                break
+            time.sleep(0.03)
+        if not body_html:
+            body_html = (
+                '<p style="color:#666;text-align:center">Rendering…</p>'
+            )
+        title = os.path.basename(file_key) if file_key else "Presentation"
+        html = build_presentation(body_html, title=title)
         data = html.encode("utf-8")
         self.send_response(200)
         self._cors()

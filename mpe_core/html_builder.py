@@ -287,6 +287,8 @@ def build_preview_shell(
         '<div class="mdpp-toolbar mdpp-toolbar-sidebar">\n'
         '<button id="mdpp-export-png" title="Export PNG" onclick="mdppExportPng()">🖼️</button>\n'
         '<button id="mdpp-export-html" title="Export HTML" onclick="mdppExportHtml()">💾</button>\n'
+        '<button id="mdpp-presentation" title="Presentation mode (slides)"'
+        ' onclick="mdppOpenPresentation()">📽️</button>\n'
         '<span class="mdpp-toolbar-sep" aria-hidden="true"></span>\n'
         '<button id="mdpp-sponsor" title="Tip" onclick="mdppShowSponsor()">☕</button>\n'
         '</div>\n'

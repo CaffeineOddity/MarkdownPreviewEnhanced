@@ -124,6 +124,7 @@ REQUIRED_FILES=(
     "assets/mermaid.min.js"
     "assets/echarts.min.js"
     "assets/html2canvas.min.js"
+    "mpe_core/presentation_builder.py"
     "assets/katex/katex.min.js"
     "assets/katex/katex.min.css"
     "assets/katex/fonts/KaTeX_Main-Regular.woff2"
