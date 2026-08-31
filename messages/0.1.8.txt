@@ -1,0 +1,11 @@
+MarkdownPreviewEnhanced 0.1.8
+=============================
+
+- feat: presentation mode — 16:9 slides from h1–h4, same rendering as live preview (📽️ or command palette)
+- feat: one markdown file ↔ one preview tab; Toggle reuses the existing tab
+- feat: switching a preview tab focuses the matching Sublime view, and vice versa
+- feat: HTTP/SSE stay up while any preview tab is open; stop after the last tab closes
+- fix: Cmd+Shift+M and focusing Chrome no longer yank Sublime to the wrong file
+- fix: pasting a preview URL into a new tab takes over the old session (banner if Chrome blocks window.close)
+- fix: load mdpopups from Sublime Lib when Package Control does not inject it
+- docs: document presentation mode and tab lifecycle in English and Chinese READMEs
