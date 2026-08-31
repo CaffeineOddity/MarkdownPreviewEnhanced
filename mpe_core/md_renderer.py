@@ -17,19 +17,118 @@ import hashlib
 from .log import debug, error
 
 
+def _load_mdpopups():
+    """Import markdown + pygments from the mdpopups dependency.
+
+    Primary path: Package Control injects mdpopups into sys.path when this
+    package is listed in ``installed_packages`` (declared via
+    ``dependencies.json``). That is the supported, regular flow.
+
+    Fallback: when this package is installed manually as a .sublime-package
+    (not registered with Package Control), PC does not wire up the dependency
+    and ``import mdpopups`` fails. mdpopups is still physically present under
+    ``<ST data>/Lib/python38/`` (PC installs it for other packages too), so we
+    locate that directory and put it on sys.path ourselves. This keeps a
+    manual/development zip install working without PC's dependency machinery.
+    """
+    try:
+        from mdpopups import markdown as _md
+        from mdpopups.markdown.extensions.attr_list import AttrListExtension
+        from mdpopups.markdown.extensions.codehilite import CodeHiliteExtension
+        from mdpopups.markdown.extensions.fenced_code import FencedCodeExtension
+        from mdpopups.markdown.extensions.footnotes import FootnoteExtension
+        from mdpopups.markdown.extensions.nl2br import Nl2BrExtension
+        from mdpopups.markdown.extensions.tables import TableExtension
+        from mdpopups.markdown.extensions.toc import TocExtension
+        return {
+            "md": _md,
+            "AttrList": AttrListExtension,
+            "CodeHilite": CodeHiliteExtension,
+            "FencedCode": FencedCodeExtension,
+            "Footnotes": FootnoteExtension,
+            "Nl2Br": Nl2BrExtension,
+            "Tables": TableExtension,
+            "Toc": TocExtension,
+        }
+    except Exception:
+        pass
+
+    # Fallback: locate mdpopups under ST's Lib/python38 without going through
+    # Package Control's dependency injection.
+    import sys
+    import glob
+    candidates = []
+    # <ST data>/Lib/python38 — the canonical PC dependency install location.
+    for env_var in ("SUBLIME_PACKAGES", "XDG_DATA_HOME"):
+        base = os.environ.get(env_var)
+        if base:
+            candidates.append(os.path.join(base, "..", "Lib", "python38"))
+    # macOS default data dir.
+    candidates.append(
+        os.path.expanduser(
+            "~/Library/Application Support/Sublime Text/Lib/python38"
+        )
+    )
+    # Windows default data dir.
+    candidates.append(
+        os.path.join(os.environ.get("APPDATA", ""), "Sublime Text", "Lib",
+                     "python38")
+    )
+    # Linux default data dir.
+    candidates.append(
+        os.path.expanduser("~/.config/sublime-text/Lib/python38")
+    )
+    seen = set()
+    for c in candidates:
+        if not c or c in seen or not os.path.isdir(c):
+            continue
+        seen.add(c)
+        if not os.path.isdir(os.path.join(c, "mdpopups")):
+            continue
+        if c not in sys.path:
+            sys.path.insert(0, c)
+        debug("mdpopups fallback: using %s" % c)
+        try:
+            from mdpopups import markdown as _md
+            from mdpopups.markdown.extensions.attr_list import AttrListExtension
+            from mdpopups.markdown.extensions.codehilite import CodeHiliteExtension
+            from mdpopups.markdown.extensions.fenced_code import FencedCodeExtension
+            from mdpopups.markdown.extensions.footnotes import FootnoteExtension
+            from mdpopups.markdown.extensions.nl2br import Nl2BrExtension
+            from mdpopups.markdown.extensions.tables import TableExtension
+            from mdpopups.markdown.extensions.toc import TocExtension
+            return {
+                "md": _md,
+                "AttrList": AttrListExtension,
+                "CodeHilite": CodeHiliteExtension,
+                "FencedCode": FencedCodeExtension,
+                "Footnotes": FootnoteExtension,
+                "Nl2Br": Nl2BrExtension,
+                "Tables": TableExtension,
+                "Toc": TocExtension,
+            }
+        except Exception as _e:
+            debug("mdpopups fallback failed at %s: %s" % (c, _e))
+            # Remove so we don't leave a broken path confusing later imports.
+            try:
+                sys.path.remove(c)
+            except ValueError:
+                pass
+    return None
+
+
 try:
-    # markdown + pygments are provided by the ``mdpopups`` dependency (declared
-    # in dependencies.json). mdpopups vendors both correctly so they never
-    # leak into the bare top-level ``sys.modules`` namespace (see issue #2).
-    # This package runs on the Python 3.8 plugin host (.python-version=3.8).
-    from mdpopups import markdown as _md
-    from mdpopups.markdown.extensions.attr_list import AttrListExtension
-    from mdpopups.markdown.extensions.codehilite import CodeHiliteExtension
-    from mdpopups.markdown.extensions.fenced_code import FencedCodeExtension
-    from mdpopups.markdown.extensions.footnotes import FootnoteExtension
-    from mdpopups.markdown.extensions.nl2br import Nl2BrExtension
-    from mdpopups.markdown.extensions.tables import TableExtension
-    from mdpopups.markdown.extensions.toc import TocExtension
+    _mods = _load_mdpopups()
+    if _mods is None:
+        raise ImportError("mdpopups not found via PC or fallback paths")
+    _md = _mods["md"]
+    AttrListExtension = _mods["AttrList"]
+    CodeHiliteExtension = _mods["CodeHilite"]
+    FencedCodeExtension = _mods["FencedCode"]
+    FootnoteExtension = _mods["Footnotes"]
+    Nl2BrExtension = _mods["Nl2Br"]
+    TableExtension = _mods["Tables"]
+    TocExtension = _mods["Toc"]
     _HAS_MARKDOWN = True
     _IMPORT_ERROR = None
 except Exception as _e:

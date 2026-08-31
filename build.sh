@@ -331,10 +331,15 @@ except Exception:
         sys.modules["mdpopups.pygments"] = _stubs["pygments"]
 
 # Import path exercised at runtime (must match md_renderer.py). A failure here
-# means md_renderer's import names are wrong.
-from mdpopups import markdown as _md  # noqa: E402
-from mdpopups.markdown.extensions.fenced_code import FencedCodeExtension  # noqa: E402
-from mdpopups.markdown.extensions.codehilite import CodeHiliteExtension  # noqa: E402
+# means md_renderer's import names are wrong. When neither real mdpopups nor
+# system markdown/pygments are available, skip this section entirely — the
+# render smoke test is only meaningful with the real dependency, and mdpopups
+# is installed by Package Control on the ST 3.8 host, not the build host.
+_CAN_PROBE_MDPOPUPS = _HAS_REAL_MDPOPUPS or "mdpopups" in sys.modules
+if _CAN_PROBE_MDPOPUPS:
+    from mdpopups import markdown as _md  # noqa: E402
+    from mdpopups.markdown.extensions.fenced_code import FencedCodeExtension  # noqa: E402
+    from mdpopups.markdown.extensions.codehilite import CodeHiliteExtension  # noqa: E402
 
 if _HAS_REAL_MDPOPUPS:
     from mpe_core.md_renderer import render
@@ -349,7 +354,7 @@ if _HAS_REAL_MDPOPUPS:
     # Real Pygments token spans - not the plain <pre class="codehilite"><code> fallback
     assert "<span" in out["body_html"], "code highlight missing pygments spans"
 else:
-    print("  [SKIP] render smoke test: real mdpopups not installed offline (verify in ST)")
+    print("  [SKIP] render smoke test: mdpopups not available on build host (verify in ST)")
 
 # Bug B: assets via sublime.load_resource
 from mpe_core import assets
