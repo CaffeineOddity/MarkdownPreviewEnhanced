@@ -1,4 +1,9 @@
-"""Cross-platform browser open / close / focus for MarkdownPreviewEnhanced."""
+"""Cross-platform browser open / close / focus for MarkdownPreviewEnhanced.
+
+Opening a new preview still uses ``open -a`` / the browser exe (no duplicate
+logic there).  Focusing an *existing* tab on macOS uses AppleScript to set
+the active tab by URL — Chrome ignores ``window.focus()`` on OS-opened tabs.
+"""
 import os
 import subprocess
 import sys
@@ -17,14 +22,13 @@ def _startupinfo():
     return None
 
 
-# (bundle_id, display_name, applescript_name or None, supports_tab_script)
-_MAC_BROWSERS = [
-    ("com.google.Chrome", "Google Chrome", "Google Chrome", True),
-    ("com.apple.Safari", "Safari", "Safari", True),
-    ("org.mozilla.firefox", "Firefox", "Firefox", False),
-    ("com.microsoft.edgemac", "Microsoft Edge", "Microsoft Edge", True),
-    ("com.brave.Browser", "Brave Browser", "Brave Browser", True),
-    ("com.operasoftware.Opera", "Opera", "Opera", False),
+_MAC_BROWSER_APPS = [
+    ("com.google.Chrome", "Google Chrome"),
+    ("com.apple.Safari", "Safari"),
+    ("org.mozilla.firefox", "Firefox"),
+    ("com.microsoft.edgemac", "Microsoft Edge"),
+    ("com.brave.Browser", "Brave Browser"),
+    ("com.operasoftware.Opera", "Opera"),
 ]
 
 _WIN_BROWSER_CMDS = [
@@ -74,10 +78,7 @@ def _url_hint(url):
     """Short stable substring used to find an existing preview tab."""
     if not url:
         return ""
-    # Prefer host:port for http; path for file://
     if url.startswith("http://") or url.startswith("https://"):
-        # 保留 host:port 和 query,以便按文档区分标签
-        # http://127.0.0.1:8765/?file=/abs/a.md → 127.0.0.1:8765/?file=/abs/a.md
         return url.split("://", 1)[-1]
     if url.startswith("file://"):
         return url.replace("file://", "")
@@ -85,7 +86,7 @@ def _url_hint(url):
 
 
 def _preview_match_hints(url):
-    """同一文档可能是 ?file=%2Fabs%2Fa.md 或 ?file=/abs/a.md,两种都要能对上。"""
+    """Same doc may appear as ?file=%2Fabs%2Fa.md or ?file=/abs/a.md."""
     from urllib.parse import parse_qs, quote, urlparse
 
     hints = []
@@ -120,100 +121,128 @@ def _as_url_matches(hints):
     return "(" + " or ".join(parts) + ")"
 
 
+# display name -> AppleScript process name (Chromium-family + Safari)
+_MAC_AS_NAMES = {
+    "Google Chrome": "Google Chrome",
+    "Safari": "Safari",
+    "Microsoft Edge": "Microsoft Edge",
+    "Brave Browser": "Brave Browser",
+}
+
+
 class BrowserSession:
-    """Tracks the last opened browser so we can focus or close it."""
+    """Tracks the last opened browser so we can close it."""
 
     def __init__(self):
         self.proc = None
-        self.as_name = None
-        self.supports_tab_script = False
         self.system = _SYSTEM
         self.last_url = None
         self.app_name = None
 
     def open(self, url, preferred="auto", log=None, focus_existing=True):
-        """Open *url*, or focus an existing tab that already shows it."""
+        """Open *url* in the preferred browser.
+
+        ``focus_existing`` is accepted for API compatibility but has no
+        OS-level effect - tab reuse/focus is handled in the browser via
+        SSE switchTab + window.open('', name).
+        """
         self.last_url = url
         log = log or (lambda m: None)
         preferred = (preferred or "auto").lower()
 
         if preferred == "default":
             return self._open_default(url, log)
-
         if self.system == "Darwin":
-            return self._open_mac(url, preferred, log, focus_existing=focus_existing)
+            return self._open_mac(url, preferred, log)
         if self.system == "Windows":
             return self._open_win(url, preferred, log)
         return self._open_linux(url, preferred, log)
 
-    def focus(self, url=None, log=None):
-        """Bring the preview browser tab to the front if we can find it."""
-        log = log or (lambda m: None)
-        url = url or self.last_url
-        if not url:
-            log("focus: no url")
-            return False
-        if self.system == "Darwin":
-            return self._focus_mac(url, log, open_if_missing=True)
-        # Best-effort: re-open URL (browsers usually reuse/focus the tab)
-        preferred = "auto"
-        if self.app_name:
-            preferred = self.app_name
-        return self.open(url, preferred=preferred, log=log, focus_existing=True)
+    def focus_existing_tab(self, url, log=None):
+        """Focus an already-open preview tab. Never opens a new one.
 
-    def focus_existing_tab(self, url, log):
-        """只聚焦已有预览 tab,找不到也不新开。"""
+        macOS: AppleScript walks Chrome/Safari/Edge/Brave tabs by URL.
+        Other OS: not supported (returns False); caller must not OS-open.
+        """
+        log = log or (lambda m: None)
         if not url:
             log("focus existing: no url")
             return False
         self.last_url = url
-        if self.system == "Darwin":
-            return self._focus_mac(url, log, open_if_missing=False)
-        return False
+        if self.system != "Darwin":
+            log("focus existing: no tab script on %s" % self.system)
+            return False
+        return self._focus_mac(url, log)
 
     def close(self, preview_file_hint=None, log=None):
+        """Best-effort close of the spawned browser process (if any).
+
+        Preview tabs are closed by pushing an SSE 'close' event - the tab
+        closes itself (window.close()).  This only cleans up a process we
+        spawned ourselves.
+        """
         log = log or (lambda m: None)
-        hint = preview_file_hint or _url_hint(self.last_url)
-        if not hint:
-            log("close: no hint available")
-            return
-        if self.system == "Darwin":
-            hint = str(hint).replace("\\", "/").replace('"', "")
-            # Collect unique AppleScript names, self.as_name first
-            as_names = []
-            if self.as_name:
-                as_names.append(self.as_name)
-            for _bid, _name, an, _tab in _MAC_BROWSERS:
-                if an and an not in as_names:
-                    as_names.append(an)
-            for an in as_names:
-                try:
-                    if an == "Safari":
-                        script = self._safari_close_script(hint)
-                    else:
-                        script = self._chrome_close_script(an, hint)
-                    subprocess.run(
-                        ["osascript", "-e", script],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
-                except Exception:
-                    pass
         if self.proc is not None:
             try:
                 self.proc.terminate()
             except Exception:
                 pass
             self.proc = None
+            log("closed spawned browser process")
 
-    # ── macOS ───────────────────────────────────────────────────────────────
+    # ── macOS: open -a (no AppleScript) ────────────────────────────────────
 
-    def _run_osascript(self, script, log, label):
+    def _open_mac(self, url, preferred, log):
+        app = self._detect_mac_app(preferred)
+        if not app:
+            return self._open_default(url, log)
+        self.app_name = app
+        try:
+            r = subprocess.run(
+                ["open", "-a", app, url],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                universal_newlines=True, timeout=5)
+            if r.returncode == 0:
+                log("%s opened via open -a: %s" % (app, url))
+                return True
+            log("open -a %s failed: %s" % (app, (r.stderr or "")[:200]))
+        except Exception as e:
+            log("open -a %s failed: %s" % (app, e))
+        return self._open_default(url, log)
+
+    def _detect_mac_app(self, preferred):
+        """Find an installed browser app that matches *preferred*."""
+        if preferred not in ("auto", "default", ""):
+            # Preferred name may not match bundle ids; check app display names first.
+            for bid, name in _MAC_BROWSER_APPS:
+                if _matches_preferred(preferred, name):
+                    return name
+        # Fall back to any installed browser (mdfind on bundle id).
+        for bid, name in _MAC_BROWSER_APPS:
+            try:
+                r = subprocess.run(
+                    ["mdfind", "kMDItemCFBundleIdentifier == '%s'" % bid],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    universal_newlines=True, timeout=3)
+                if r.stdout.strip():
+                    return name
+            except Exception:
+                continue
+        return None
+
+    def _run_osascript(self, script, log, label, expect_found=False):
         try:
             r = subprocess.run(
                 ["osascript", "-e", script],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=8)
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                universal_newlines=True, timeout=8)
             if r.returncode != 0:
                 err = (r.stderr or r.stdout or "").strip()
                 log("%s AppleScript failed (%s): %s" % (label, r.returncode, err[:300]))
+                return False
+            out = (r.stdout or "").strip().lower()
+            if expect_found and "found" not in out:
+                log("%s existing tab not found" % label)
                 return False
             return True
         except Exception as e:
@@ -221,7 +250,6 @@ class BrowserSession:
             return False
 
     def _chrome_focus_or_open_script(self, app, url, hints, open_if_missing):
-        # Chromium-family: find tab by URL substring, else optionally open.
         match = _as_url_matches(hints)
         open_block = ""
         if open_if_missing:
@@ -258,7 +286,9 @@ class BrowserSession:
             "    end repeat\n"
             "  end if\n"
             + open_block +
-            ("  activate\n" if open_if_missing else "  if found then activate\n") +
+            ("  activate\n" if open_if_missing else
+             "  if found then activate\n"
+             "  if found then\n    return \"found\"\n  else\n    return \"miss\"\n  end if\n") +
             "end tell"
         )
 
@@ -292,142 +322,38 @@ class BrowserSession:
             "    end repeat\n"
             "  end if\n"
             + open_block +
-            ("  activate\n" if open_if_missing else "  if found then activate\n") +
+            ("  activate\n" if open_if_missing else
+             "  if found then activate\n"
+             "  if found then\n    return \"found\"\n  else\n    return \"miss\"\n  end if\n") +
             "end tell"
         )
 
-    def _chrome_close_script(self, app, hint):
-        return (
-            'tell application "%s"\n' % app +
-            "  repeat with w in every window\n"
-            "    repeat with t in every tab of w\n"
-            "      try\n"
-            "        set u to URL of t\n"
-            '        if u contains "%s" then\n' % hint +
-            "          close t\n"
-            "          return\n"
-            "        end if\n"
-            "      end try\n"
-            "    end repeat\n"
-            "  end repeat\n"
-            "end tell"
-        )
-
-    def _safari_close_script(self, hint):
-        return (
-            'tell application "Safari"\n'
-            "  repeat with w in every window\n"
-            "    repeat with t in every tab of w\n"
-            "      try\n"
-            "        set u to URL of t\n"
-            '        if u contains "%s" then\n' % hint +
-            "          close t\n"
-            "          return\n"
-            "        end if\n"
-            "      end try\n"
-            "    end repeat\n"
-            "  end repeat\n"
-            "end tell"
-        )
-
-    def _open_mac(self, url, preferred, log, focus_existing=True):
-        name, as_name, tab_ok = self._detect_mac(preferred)
-        self.as_name = as_name
-        self.app_name = name
-        self.supports_tab_script = tab_ok
-
-        if not name:
-            return self._open_default(url, log)
-
+    def _focus_mac(self, url, log):
+        app = self.app_name or self._detect_mac_app("auto")
+        as_name = _MAC_AS_NAMES.get(app)
+        if not as_name and app:
+            for display, script_name in _MAC_AS_NAMES.items():
+                if _matches_preferred(app, display):
+                    as_name = script_name
+                    app = display
+                    break
+        if not as_name:
+            log("focus existing: no AppleScript app for %s" % app)
+            return False
         hints = _preview_match_hints(url)
-        url_safe = url.replace('"', "%22")
-
-        if as_name and tab_ok and focus_existing:
-            if as_name == "Safari":
-                script = self._safari_focus_or_open_script(url_safe, hints, True)
-            else:
-                script = self._chrome_focus_or_open_script(as_name, url_safe, hints, True)
-            if self._run_osascript(script, log, name):
-                log("%s focus/open: %s" % (name, url))
-                return True
-
-        if as_name and not focus_existing:
-            # Force a fresh load in a new tab
-            if as_name == "Safari":
-                script = (
-                    'tell application "Safari"\n'
-                    '  open location "%s"\n' % url_safe +
-                    "  activate\n"
-                    "end tell"
-                )
-            else:
-                script = (
-                    'tell application "%s"\n' % as_name +
-                    "  if (count of windows) = 0 then\n"
-                    "    make new window\n"
-                    '    set URL of active tab of front window to "%s"\n' % url_safe +
-                    "  else\n"
-                    '    tell front window to make new tab with properties {URL:"%s"}\n' % url_safe +
-                    "  end if\n"
-                    "  activate\n"
-                    "end tell"
-                )
-            if self._run_osascript(script, log, name):
-                log("%s opened: %s" % (name, url))
-                return True
-
-        try:
-            r = subprocess.run(
-                ["open", "-a", name, url],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=5)
-            if r.returncode == 0:
-                log("%s opened via open -a: %s" % (name, url))
-                return True
-            log("open -a %s failed: %s" % (name, (r.stderr or "")[:200]))
-        except Exception as e:
-            log("open -a %s failed: %s" % (name, e))
-        return self._open_default(url, log)
-
-    def _focus_mac(self, url, log, open_if_missing):
-        name, as_name, tab_ok = self._detect_mac("auto")
-        if self.as_name:
-            as_name = self.as_name
-            name = self.app_name or name
-            tab_ok = self.supports_tab_script or tab_ok
-        if not as_name or not tab_ok:
-            if not open_if_missing:
-                return False
-            return self._open_mac(url, "auto", log, focus_existing=True)
-
-        hints = _preview_match_hints(url)
-        url_safe = url.replace('"', "%22")
+        url_safe = (url or "").replace('"', "%22")
         if as_name == "Safari":
-            script = self._safari_focus_or_open_script(url_safe, hints, open_if_missing)
+            script = self._safari_focus_or_open_script(url_safe, hints, False)
         else:
             script = self._chrome_focus_or_open_script(
-                as_name, url_safe, hints, open_if_missing)
-        ok = self._run_osascript(script, log, name or as_name)
+                as_name, url_safe, hints, False)
+        ok = self._run_osascript(script, log, as_name, expect_found=True)
         if ok:
-            log("%s focused: %s" % (name or as_name, url))
+            log("%s focused existing tab: %s" % (as_name, url))
+            self.app_name = app
         return ok
 
-    def _detect_mac(self, preferred):
-        found = []
-        for bid, name, as_name, tab_ok in _MAC_BROWSERS:
-            try:
-                r = subprocess.run(
-                    ["mdfind", "kMDItemCFBundleIdentifier == '%s'" % bid],
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=3)
-                if r.stdout.strip():
-                    found.append((name, as_name, tab_ok))
-            except Exception:
-                pass
-        if not found:
-            return None, None, False
-        for name, as_name, tab_ok in found:
-            if _matches_preferred(preferred, name):
-                return name, as_name, tab_ok
-        return found[0]
+    # ── default / Windows / Linux ───────────────────────────────────────────
 
     def _open_default(self, url, log):
         try:
@@ -514,35 +440,33 @@ class BrowserSession:
 
 
 def find_chrome_binary():
-    """Locate a Chrome/Chromium binary for headless PDF export."""
+    """Locate a Chrome/Chromium executable on this platform."""
     if _SYSTEM == "Darwin":
-        candidates = [
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-            "/Applications/Chromium.app/Contents/MacOS/Chromium",
-            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-        ]
-    elif _SYSTEM == "Windows":
-        candidates = [p for _, p in _WIN_BROWSER_CMDS]
-    else:
-        candidates = [
-            "google-chrome",
-            "google-chrome-stable",
-            "chromium-browser",
-            "chromium",
-            "microsoft-edge",
-            "brave-browser",
-        ]
-    for c in candidates:
-        if os.path.sep in c or (len(c) > 1 and c[1] == ":"):
-            if os.path.isfile(c):
-                return c
-        else:
+        for bid, name in _MAC_BROWSER_APPS:
+            if "chrome" in name.lower() or "chrom" in name.lower():
+                try:
+                    r = subprocess.run(
+                        ["mdfind", "kMDItemCFBundleIdentifier == '%s'" % bid],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                        universal_newlines=True, timeout=3)
+                    if r.stdout.strip():
+                        return name
+                except Exception:
+                    continue
+        return "Google Chrome"
+    if _SYSTEM == "Windows":
+        for key, path in _WIN_BROWSER_CMDS:
+            if "chrome" in key or "chrom" in path.lower():
+                if os.path.isfile(path):
+                    return path
+        return None
+    for name in _LINUX_BROWSERS:
+        if "chrome" in name or "chrom" in name:
             try:
-                r = subprocess.run(
-                    ["which", c], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=3)
-                if r.returncode == 0 and r.stdout.strip():
-                    return r.stdout.strip()
+                r = subprocess.run(["which", name], stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, universal_newlines=True, timeout=3)
+                if r.stdout.strip():
+                    return name
             except Exception:
-                pass
+                continue
     return None
