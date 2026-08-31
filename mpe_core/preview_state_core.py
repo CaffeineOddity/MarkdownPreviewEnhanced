@@ -312,6 +312,7 @@ def handle_tab_open(file_path):
         return None
     if result.get("replaced"):
         notify_close_old(file_path, result["old_gen"])
+        _LOG("close_old file=%s gen=%s" % (file_path, result["old_gen"]))
     notify_tabs(result.get("files"))
     _LOG("tab_open file=%s tabs=%d replaced=%s"
          % (file_path, tab_manager.live_count(), result.get("replaced")))

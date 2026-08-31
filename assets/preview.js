@@ -154,12 +154,13 @@
     }
     if (name === "close") {
       if (data && data.file && data.file !== channelFile) return;
-      window.close();
+      retirePreviewTab();
+      return;
     }
     if (name === "close_old") {
       if (data && data.file === channelFile && Number(data.gen) === tabGen) {
         console.log(ts() + " [MDPP] close_old gen=" + tabGen);
-        window.close();
+        retirePreviewTab();
       }
       return;
     }
@@ -415,6 +416,30 @@
     }
   }
 
+  function retirePreviewTab() {
+    console.log(ts() + " [MDPP] retirePreviewTab gen=" + tabGen
+                + " history=" + (history.length || 0));
+    publishTabBye();
+    announceLeaderGone();
+    disconnectStream();
+    try { window.close(); } catch (err) {}
+    // Chrome 禁止脚本关掉地址栏 / open -a 打开的 tab。关不掉就退出会话并提示。
+    setTimeout(function () {
+      if (window.closed) return;
+      if (document.getElementById("mdpp-replaced")) return;
+      var bar = document.createElement("div");
+      bar.id = "mdpp-replaced";
+      bar.setAttribute("role", "status");
+      bar.style.cssText = "position:sticky;top:0;z-index:99999;padding:10px 16px;"
+        + "background:#3d2a00;color:#fff;font:14px/1.4 sans-serif;";
+      bar.textContent = "This preview is open in another tab. You can close this one.";
+      if (document.body) {
+        document.body.insertBefore(bar, document.body.firstChild);
+      }
+      document.title = "(已替换) " + document.title;
+    }, 100);
+  }
+
   function bindBroadcast() {
     if (!bc || bindBroadcast._bound) return;
     bindBroadcast._bound = true;
@@ -576,7 +601,8 @@
   function publishTabBye() {
     bcSend({ type: "tab-bye", id: tabId });
     if (cfg.mode !== "server" || !channelFile || !tabGen) return;
-    var url = "/api/tab_close?file=" + encodeURIComponent(channelFile) + "&gen=" + tabGen;
+    var url = "/api/tab_close?file=" + encodeURIComponent(channelFile)
+      + "&gen=" + tabGen + "&hist=" + (history.length || 0);
     try {
       if (navigator.sendBeacon) {
         navigator.sendBeacon(url);

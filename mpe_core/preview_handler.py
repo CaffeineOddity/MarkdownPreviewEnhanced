@@ -288,7 +288,10 @@ class PreviewHandler(BaseHTTPRequestHandler):
         except (TypeError, ValueError):
             gen = 0
         if file_key:
+            hist_raw = (params.get("hist") or [""])[0]
             _core.handle_tab_close(file_key, gen)
+            _core.get_log()("tab_close file=%s gen=%s hist=%s"
+                            % (file_key, gen, hist_raw))
         self.send_response(204)
         self._cors()
         self.end_headers()
