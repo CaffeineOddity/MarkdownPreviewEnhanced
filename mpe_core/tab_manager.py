@@ -86,11 +86,35 @@ def find_view_by_file(file_path):
 
 
 def focus_view_for_file(file_path):
-    """Switch the ST active view to the one for *file_path*. Returns True if found."""
+    """Switch the ST active view to the one for *file_path*. Returns True if found.
+
+    必须用 view 所在 window,不能用 active_window():用户点浏览器时 ST 在后台,
+    对错误 window 调 focus_view 等于没切。ST 失焦时 focus_view 也常被忽略,
+    ST4 再用 select_sheets 选中对应 sheet.
+    """
     v = find_view_by_file(file_path)
     if v is None:
+        log.debug("focus_view: no view for %s" % file_path)
         return False
-    sublime.active_window().focus_view(v)
+    window = v.window()
+    if window is None:
+        window = sublime.active_window()
+    if window is None:
+        log.debug("focus_view: no window for %s" % file_path)
+        return False
+    group, _index = window.get_view_index(v)
+    if group >= 0:
+        window.focus_group(group)
+    window.focus_view(v)
+    sheet_fn = getattr(v, "sheet", None)
+    select_sheets = getattr(window, "select_sheets", None)
+    if sheet_fn and select_sheets:
+        sheet = sheet_fn()
+        if sheet is not None:
+            select_sheets([sheet])
+    active = window.active_view()
+    active_fn = active.file_name() if active is not None else None
+    log.debug("focus_view file=%s active=%s" % (file_path, active_fn))
     return True
 
 
@@ -203,6 +227,14 @@ def session_count():
     """Rows including pending (registered, not yet tab_open)."""
     with _lock:
         return len(_tabs)
+
+
+def has_session(file_path):
+    """True if *file_path* has a registry row (pending or live)."""
+    if not file_path:
+        return False
+    with _lock:
+        return file_path in _tabs
 
 
 def drop_stale_pending(max_age=15.0):

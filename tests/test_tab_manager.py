@@ -83,6 +83,16 @@ class TabManagerLifecycleTests(unittest.TestCase):
         self.assertEqual(tab_manager.live_count(), 1)
         self.assertEqual(tab_manager.live_files(), ["/tmp/b.md"])
 
+    def test_has_session_tracks_register_and_close(self):
+        self.assertFalse(tab_manager.has_session("/tmp/a.md"))
+        tab_manager.register("/tmp/a.md", view_id=11)
+        self.assertTrue(tab_manager.has_session("/tmp/a.md"))
+        self.assertFalse(tab_manager.is_alive("/tmp/a.md"))
+        tab_manager.tab_open("/tmp/a.md")
+        self.assertTrue(tab_manager.has_session("/tmp/a.md"))
+        tab_manager.tab_close("/tmp/a.md", gen=1)
+        self.assertFalse(tab_manager.has_session("/tmp/a.md"))
+
     def test_empty_path_is_ignored(self):
         tab_manager.register("", view_id=1)
         self.assertEqual(tab_manager.session_count(), 0)

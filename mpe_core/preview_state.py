@@ -262,8 +262,8 @@ def start_scroll_poller():
             if docs:
                 items = [(d["path"], d.get("focus_browser", False)) for d in docs]
                 for path, fb in items:
-                    log.debug("open doc from browser: %s (focus_browser=%s)"
-                              % (path, fb))
+                    log.debug("open doc from browser: %s (focus_browser=%s) tabs=%d"
+                              % (path, fb, tab_manager.live_count()))
                 sublime.set_timeout(
                     lambda: [open_doc_from_browser(p, focus_browser=fb)
                              for p, fb in items], 0

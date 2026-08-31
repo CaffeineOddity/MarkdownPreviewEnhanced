@@ -171,10 +171,14 @@ class PreviewHandler(BaseHTTPRequestHandler):
             return False
         if not os.path.isfile(q):
             return False
+        from . import tab_manager
         with _core._STATE.lock:
             ch = _core._STATE.channels.get(q)
-            if ch is not None and (ch.shell_html or ch.body_html):
-                return True
+            has_html = ch is not None and (ch.shell_html or ch.body_html)
+        # Toggle 已经 register+render 再 OS-open:有行且有 html,不再 queue。
+        # 点链接打开尚未登记的文件:即使频道里有残留 html 也要切 ST。
+        if has_html and tab_manager.has_session(q):
+            return True
         _core.queue_open_doc(q, focus_browser=False)
         return True
 
@@ -249,6 +253,12 @@ class PreviewHandler(BaseHTTPRequestHandler):
             return
         params = parse_qs(query)
         tab_switch = params.get("tab_switch", ["0"])[0] == "1"
+        if tab_switch and not _core.tab_switch_allowed(file_key):
+            _core.get_log()("open_doc ignored (os-open pin) file=%s" % file_key)
+            self.send_response(204)
+            self._cors()
+            self.end_headers()
+            return
         _core.queue_open_doc(file_key, focus_browser=False)
         _core.get_log()("open_doc file=%s tab_switch=%s" % (file_key, tab_switch))
         self.send_response(204)
@@ -285,14 +295,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
 
     def _api_snapshot(self, query):
         file_key = _core._file_key_from_query(query)
-        with _core._STATE.lock:
-            ch = _core._STATE.channel(file_key)
-            payload = {
-                "file": file_key,
-                "html": ch.body_html,
-                "toc": ch.toc_html,
-                "line": ch.editor_line,
-            }
+        payload = _core.snapshot_payload(file_key)
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(200)
         self._cors()

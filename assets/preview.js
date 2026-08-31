@@ -170,6 +170,12 @@
       }
       return;
     }
+    if (name === "pinTab") {
+      _pinFile = (data && data.file) || "";
+      _pinUntil = Date.now() + 2000;
+      console.log(ts() + " [MDPP] pinTab file=" + _pinFile);
+      return;
+    }
     if (name === "switchTab") {
       console.log(ts() + " [MDPP] switchTab received file=" + (data && data.file) + " tabFile=" + channelFile);
       if (data && data.file === channelFile) {
@@ -221,6 +227,13 @@
         var data = parseEventData(e.data);
         handleSseEvent("tabs", data);
         bcSend({ type: "sse", event: "tabs", data: data });
+      } catch (err) {}
+    });
+    stream.addEventListener("pinTab", function (e) {
+      try {
+        var data = parseEventData(e.data);
+        handleSseEvent("pinTab", data);
+        bcSend({ type: "sse", event: "pinTab", data: data });
       } catch (err) {}
     });
     stream.addEventListener("ping", function () {
@@ -330,6 +343,10 @@
       publishTabHello(true);
       return;
     }
+    if (msg.type === "preview-visible") {
+      if (msg.file) _lastPreviewVisibleFile = msg.file;
+      return;
+    }
     if (msg.type === "focus-claim") {
       // Tab-switch arbitration: remember the latest focus claim from any tab.
       // document.hasFocus() is unreliable with DevTools (multiple tabs report
@@ -437,13 +454,20 @@
 
   var _lastNotifyFile = "";
   var _lastNotifyTime = 0;
+  var _pinFile = "";
+  var _pinUntil = 0;
+  var _lastPreviewVisibleFile = "";
 
   function notifyDocSwitch() {
     if (cfg.mode !== "server" || !channelFile) {
       return;
     }
-    // Deduplicate: don't notify for the same file within 3 seconds
     var now = Date.now();
+    if (_pinFile && now < _pinUntil && channelFile !== _pinFile) {
+      console.log(ts() + " [MDPP] notifyDocSwitch skipped (pin) file=" + channelFile);
+      return;
+    }
+    // Deduplicate: don't notify for the same file within 3 seconds
     if (channelFile === _lastNotifyFile && (now - _lastNotifyTime) < 3000) {
       return;
     }
@@ -457,6 +481,22 @@
     });
   }
 
+  function onBecameVisible() {
+    if (!channelFile || document.hidden) return;
+    if (_pinFile && Date.now() < _pinUntil && channelFile !== _pinFile) {
+      console.log(ts() + " [MDPP] visible skipped (pin) file=" + channelFile);
+      return;
+    }
+    // 同一份预览 tab 再次 visible = Chrome 窗口重新获焦,不是切 tab。
+    if (_lastPreviewVisibleFile === channelFile) {
+      console.log(ts() + " [MDPP] notifyDocSwitch skipped (window refocus) file=" + channelFile);
+      return;
+    }
+    _lastPreviewVisibleFile = channelFile;
+    bcSend({ type: "preview-visible", file: channelFile });
+    notifyDocSwitch();
+  }
+
   function onVisibilityChange() {
     console.log(ts() + " [MDPP] visibilitychange hidden=" + document.hidden + " file=" + channelFile);
     // Leader keeps /api/stream while hidden. Without BroadcastChannel we still
@@ -466,12 +506,12 @@
         disconnectStream();
       } else {
         connectStream();
-        notifyDocSwitch();
+        onBecameVisible();
       }
       return;
     }
     if (!document.hidden) {
-      notifyDocSwitch();
+      onBecameVisible();
     }
   }
 
@@ -479,12 +519,14 @@
   // DevTools). Broadcast a timestamped claim; after 150ms only the tab with
   // the newest claim (i.e. the one the user actually switched TO) notifies.
   function onWindowFocus() {
+    if (document.hidden) return;
     var myT = Date.now();
     bcSend({ type: "focus-claim", id: tabId, t: myT });
     setTimeout(function () {
+      if (document.hidden) return;
       if (myT > _latestFocusClaim.t) {
         console.log(ts() + " [MDPP] focus arbitration won file=" + channelFile);
-        notifyDocSwitch();
+        onBecameVisible();
       } else {
         console.log(ts() + " [MDPP] focus arbitration lost (newer claim) file=" + channelFile);
       }
@@ -546,7 +588,7 @@
 
   function announceTab() {
     if (cfg.mode !== "server" || !channelFile) {
-      return Promise.resolve();
+      return Promise.resolve(false);
     }
     return fetch("/api/tab_open?file=" + encodeURIComponent(channelFile), { cache: "no-store" })
       .then(function (r) { return r.json(); })
@@ -557,9 +599,17 @@
           renderTabList();
         }
         console.log(ts() + " [MDPP] tab_open gen=" + tabGen);
+        var html = data && typeof data.html === "string" ? data.html : "";
+        if (html && !htmlIsPlaceholder(html)) {
+          handleSseEvent("content", data);
+          if (data.line) handleSseEvent("editorLine", data);
+          return true;
+        }
+        return false;
       })
       .catch(function (err) {
         console.log(ts() + " [MDPP] tab_open failed: " + err);
+        return false;
       });
   }
 
@@ -630,19 +680,20 @@
     if (!file || file === channelFile) return;
     var url = "/?file=" + encodeURIComponent(file);
     var name = windowNameFor(file);
+    var alive = fileIsAlive(file);
     // User gesture: window.open(url, name) either reuses a named window or
     // opens one in front. If a second tab is created, tab_open + close_old
     // keeps 1:1. Empty-url open is not used (about:blank on OS-opened tabs).
+    // 尚未有活 tab 时 GET /?file= 会 queue ST,不必再打一遍 open_doc。
     try {
       window.open(url, name);
     } catch (err) {
       window.location.href = url;
     }
     bcSend({ type: "focus-tab", file: file });
-    if (cfg.mode === "server") {
-      var q = "/api/open_doc?file=" + encodeURIComponent(file);
-      if (fileIsAlive(file)) q += "&tab_switch=1";
-      fetch(q, { cache: "no-store" }).catch(function () {});
+    if (cfg.mode === "server" && alive) {
+      fetch("/api/open_doc?file=" + encodeURIComponent(file) + "&tab_switch=1",
+            { cache: "no-store" }).catch(function () {});
     }
   }
 
@@ -892,15 +943,24 @@
     });
 
     if (cfg.mode === "server") {
-      announceTab().then(function () {
+      // 本页 GET /?file= 已经 queue 过 ST,启动时的 focus 不再打 open_doc。
+      _lastNotifyFile = channelFile;
+      _lastNotifyTime = Date.now();
+      _lastPreviewVisibleFile = channelFile;
+      announceTab().then(function (hasHtml) {
         if (bc) {
           bindBroadcast();
-          fetchSnapshot();
-          bcSend({ type: "need-snapshot", file: channelFile, id: tabId });
+          if (!document.hidden) {
+            bcSend({ type: "preview-visible", file: channelFile });
+          }
+          if (!hasHtml) {
+            fetchSnapshot();
+            bcSend({ type: "need-snapshot", file: channelFile, id: tabId });
+          }
           startElection();
         } else {
           bindVisibility();
-          fetchSnapshot();
+          if (!hasHtml) fetchSnapshot();
           connectStream();
         }
       });

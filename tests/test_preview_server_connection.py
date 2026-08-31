@@ -33,7 +33,9 @@ if "sublime" not in sys.modules:
 from mpe_core.preview_server import (  # noqa: E402
     PreviewServer,
     has_active_sse_connection,
+    pin_os_open_file,
     pop_open_docs,
+    reset_os_open_pin,
     state,
     update_content,
 )
@@ -98,6 +100,8 @@ class PreviewConnectionTests(unittest.TestCase):
             ch.body_html = "<p>body</p>"
             ch.toc_html = ""
         tab_manager.reset()
+        reset_os_open_pin()
+        pop_open_docs()
 
     def tearDown(self):
         self.srv.stop()
@@ -353,6 +357,52 @@ class PreviewConnectionTests(unittest.TestCase):
         finally:
             os.remove(path)
 
+    def test_open_doc_tab_switch_other_file_ignored_during_os_open_pin(self):
+        pin_os_open_file("/tmp/keep.md")
+        sock = self._connect()
+        try:
+            _http_get(
+                sock,
+                "/api/open_doc?file=" + quote("/tmp/other.md", safe="")
+                + "&tab_switch=1",
+            )
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            self.assertTrue(status.startswith("HTTP/1.1 204"), status)
+        finally:
+            sock.close()
+        self.assertEqual(pop_open_docs(), [])
+
+    def test_open_doc_tab_switch_pinned_file_still_queues(self):
+        pin_os_open_file("/tmp/keep.md")
+        sock = self._connect()
+        try:
+            _http_get(
+                sock,
+                "/api/open_doc?file=" + quote("/tmp/keep.md", safe="")
+                + "&tab_switch=1",
+            )
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            self.assertTrue(status.startswith("HTTP/1.1 204"), status)
+        finally:
+            sock.close()
+        self.assertEqual(pop_open_docs(),
+                         [{"path": "/tmp/keep.md", "focus_browser": False}])
+
+    def test_open_doc_without_tab_switch_not_blocked_by_pin(self):
+        pin_os_open_file("/tmp/keep.md")
+        sock = self._connect()
+        try:
+            _http_get(
+                sock,
+                "/api/open_doc?file=" + quote("/tmp/other.md", safe=""),
+            )
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            self.assertTrue(status.startswith("HTTP/1.1 204"), status)
+        finally:
+            sock.close()
+        self.assertEqual(pop_open_docs(),
+                         [{"path": "/tmp/other.md", "focus_browser": False}])
+
     def test_tab_open_returns_gen_and_files(self):
         sock = self._connect()
         try:
@@ -365,8 +415,70 @@ class PreviewConnectionTests(unittest.TestCase):
             self.assertFalse(data.get("replaced"))
             self.assertEqual(data.get("files"), ["/tmp/a.md"])
             self.assertTrue(tab_manager.is_alive("/tmp/a.md"))
+            self.assertIn("html", data)
+            self.assertIn("toc", data)
         finally:
             sock.close()
+
+    def test_tab_open_includes_channel_snapshot(self):
+        update_content(
+            "<p>snap-body</p>", "<ul></ul>", "", "h", None,
+            file_path="/tmp/a.md")
+        sock = self._connect()
+        try:
+            _http_get(sock, "/api/tab_open?file=" + quote("/tmp/a.md", safe=""))
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            body = _read_body(sock, headers, rest)
+            data = json.loads(body.decode("utf-8"))
+            self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+            self.assertEqual(data.get("html"), "<p>snap-body</p>")
+            self.assertEqual(data.get("toc"), "<ul></ul>")
+        finally:
+            sock.close()
+
+    def test_html_page_queues_open_doc_without_session(self):
+        fd, path = tempfile.mkstemp(suffix=".md")
+        os.close(fd)
+        pop_open_docs()
+        try:
+            with state().lock:
+                ch = state().channel(path)
+                ch.shell_html = "<html><body>ok</body></html>"
+                ch.body_html = "<p>ok</p>"
+            sock = self._connect()
+            try:
+                _http_get(sock, "/?file=" + quote(path, safe=""))
+                status, headers, rest = _recv_until_headers(sock, timeout=2)
+                _read_body(sock, headers, rest)
+                self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+            finally:
+                sock.close()
+            queued = pop_open_docs()
+            self.assertEqual(queued, [{"path": path, "focus_browser": False}])
+        finally:
+            os.remove(path)
+
+    def test_html_page_skips_queue_when_session_and_html_exist(self):
+        fd, path = tempfile.mkstemp(suffix=".md")
+        os.close(fd)
+        pop_open_docs()
+        try:
+            tab_manager.register(path, view_id=1)
+            with state().lock:
+                ch = state().channel(path)
+                ch.shell_html = "<html><body>ok</body></html>"
+                ch.body_html = "<p>ok</p>"
+            sock = self._connect()
+            try:
+                _http_get(sock, "/?file=" + quote(path, safe=""))
+                status, headers, rest = _recv_until_headers(sock, timeout=2)
+                _read_body(sock, headers, rest)
+                self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+            finally:
+                sock.close()
+            self.assertEqual(pop_open_docs(), [])
+        finally:
+            os.remove(path)
 
     def test_tab_open_replace_pushes_close_old_on_sse(self):
         stream = self._connect()

@@ -112,6 +112,35 @@ class PreviewState:
 
 _STATE = PreviewState()
 
+# OS-open / Toggle 后短时间内,Chrome 会先把旧窗口(仍显示上一份预览)拉到前台,
+# 旧 tab 的 notifyDocSwitch 会把 ST 拽回去。这段时间只接受「刚打开的那份」的 tab_switch.
+_os_open_file = None
+_os_open_pin_until = 0.0
+
+
+def pin_os_open_file(file_path, seconds=2.0):
+    """After Toggle OS-open, ignore tab_switch open_doc for any other file.
+
+    Also SSE pinTab so existing preview pages skip notifyDocSwitch.
+    """
+    global _os_open_file, _os_open_pin_until
+    _os_open_file = file_path or ""
+    _os_open_pin_until = time.time() + float(seconds)
+    payload = json.dumps({}, ensure_ascii=False)
+    _push_all_sse("pinTab", payload, _os_open_file)
+
+
+def reset_os_open_pin():
+    global _os_open_file, _os_open_pin_until
+    _os_open_file = None
+    _os_open_pin_until = 0.0
+
+
+def tab_switch_allowed(file_path):
+    if time.time() >= _os_open_pin_until:
+        return True
+    return (file_path or "") == _os_open_file
+
 
 # ── public API ───────────────────────────────────────────────────────────────
 
@@ -263,6 +292,18 @@ def notify_tabs(files=None):
     _push_all_sse("tabs", payload, "")
 
 
+def snapshot_payload(file_path):
+    """Current html/toc/line for *file_path* (same body as /api/snapshot)."""
+    with _STATE.lock:
+        ch = _STATE.channel(file_path)
+        return {
+            "file": file_path or "",
+            "html": ch.body_html,
+            "toc": ch.toc_html,
+            "line": ch.editor_line,
+        }
+
+
 def handle_tab_open(file_path):
     """Register a live browser tab. Returns the tab_open result dict."""
     from . import tab_manager
@@ -272,6 +313,12 @@ def handle_tab_open(file_path):
     if result.get("replaced"):
         notify_close_old(file_path, result["old_gen"])
     notify_tabs(result.get("files"))
+    _LOG("tab_open file=%s tabs=%d replaced=%s"
+         % (file_path, tab_manager.live_count(), result.get("replaced")))
+    snap = snapshot_payload(file_path)
+    result["html"] = snap["html"]
+    result["toc"] = snap["toc"]
+    result["line"] = snap["line"]
     return result
 
 
@@ -279,6 +326,9 @@ def handle_tab_close(file_path, gen):
     from . import tab_manager
     removed = tab_manager.tab_close(file_path, gen)
     notify_tabs()
+    if removed:
+        remaining = tab_manager.live_count()
+        _LOG("tab_close file=%s remaining=%d" % (file_path, remaining))
     return removed
 
 

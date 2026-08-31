@@ -31,6 +31,9 @@ from .preview_state_core import (
     queue_open_doc,
     pop_open_docs,
     has_active_sse_connection,
+    pin_os_open_file,
+    reset_os_open_pin,
+    tab_switch_allowed,
 )
 from .preview_handler import PreviewHandler
 
