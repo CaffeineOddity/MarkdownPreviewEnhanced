@@ -12,6 +12,10 @@
         "command": "markdown_preview_enhanced_refresh"
     },
     {
+        "caption": "MarkdownPreviewEnhanced: Presentation Mode",
+        "command": "markdown_preview_enhanced_presentation"
+    },
+    {
         "caption": "MarkdownPreviewEnhanced: Export HTML…",
         "command": "markdown_preview_enhanced_export_html"
     },

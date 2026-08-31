@@ -12,13 +12,15 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 | --- | --- |
 | ✅ 浏览器实时预览 | ✅ GitHub 风格 HTML / CSS |
 | ✅ SSE 原地更新（不刷新） | ✅ 代码高亮 |
-| ✅ 滚动位置保留 | ✅ GFM 任务列表 |
-| ✅ 编辑器 ↔ 预览滚动同步 | ✅ 脚注 |
-| ✅ 目录 + 预览 tab 列表 | ✅ YAML frontmatter |
-| ✅ 相对路径图片（`./img/a.png`） | ✅ KaTeX（`$…$` / `$$…$$`） |
-| ✅ 导出 HTML / PNG / PDF | ✅ Mermaid 图 |
-| ✅ 自定义 CSS 和 favicon | ✅ ECharts |
-| ✅ macOS / Windows / Linux | ✅ 零额外依赖 |
+| ✅ 一文件一预览 tab | ✅ GFM 任务列表 |
+| ✅ 编辑器 ↔ 预览 tab 互切 | ✅ 脚注 |
+| ✅ 滚动位置保留 | ✅ YAML frontmatter |
+| ✅ 目录 + 预览 tab 列表 | ✅ KaTeX（`$…$` / `$$…$$`） |
+| ✅ 演示模式（16:9 幻灯片） | ✅ Mermaid 图 |
+| ✅ 相对路径图片（`./img/a.png`） | ✅ ECharts |
+| ✅ 导出 HTML / PNG / PDF | ✅ 零额外依赖 |
+| ✅ 自定义 CSS 和 favicon | |
+| ✅ macOS / Windows / Linux | |
 
 ## 安装
 
@@ -33,14 +35,20 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 | macOS | Windows / Linux | 作用 |
 | --- | --- | --- |
 | `Cmd+Shift+M` | `Ctrl+Shift+M` | 打开 / 聚焦预览 |
-| `Cmd+Shift+Alt+M` | `Ctrl+Shift+Alt+M` | 关闭预览（并停止本地服务器） |
+| `Cmd+Shift+Alt+M` | `Ctrl+Shift+Alt+M` | 关闭预览 tab（无活 tab 后停服） |
 | `Cmd+Shift+E` | `Ctrl+Shift+E` | 导出 HTML |
 
-命令面板里还有 Toggle、Close、Refresh、Export HTML、Export PDF。
+命令面板里还有 Toggle、Close、Refresh、Presentation Mode、Export HTML、Export PDF。
 
-编辑时浏览器原地更新（SSE），滚动位置保留。再按一次快捷键会聚焦已有标签。
+编辑时浏览器原地更新（SSE），滚动位置保留。再按一次快捷键会聚焦已有标签，不会再叠一张。浏览器里切预览 tab，Sublime 会切到对应 view，反过来也一样。
 
-预览页左下角：🖼️ 导出 PNG，💾 导出独立 HTML，☕ tip。
+把已有预览 URL 粘到新标签时，会接管该文件的旧会话（Chrome 对「自己新建再粘贴」的标签可能不让脚本关，旧页会提示你手动关）。只要还有预览 tab 开着，本地服务器就保持；全部关掉后很快停服。
+
+预览侧栏工具条：🖼️ 导出 PNG，💾 导出独立 HTML，📽️ 演示模式，☕ tip。
+
+### 演示模式
+
+点 📽️ 或命令 **MarkdownPreviewEnhanced: Presentation Mode**。幻灯片用的就是实时预览同一套渲染（标题、代码、表格、KaTeX、Mermaid、ECharts）。每个 `h1`–`h4` 开一页。方向键、左右边缘点击或右下角 HUD 翻页。画布 16:9，按窗口缩放。
 
 ## 设置
 
