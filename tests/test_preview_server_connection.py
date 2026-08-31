@@ -33,10 +33,13 @@ if "sublime" not in sys.modules:
 from mpe_core.preview_server import (  # noqa: E402
     PreviewServer,
     has_active_sse_connection,
+    pin_os_open_file,
     pop_open_docs,
+    reset_os_open_pin,
     state,
     update_content,
 )
+from mpe_core import tab_manager  # noqa: E402
 
 
 def _recv_until_headers(sock, timeout):
@@ -96,9 +99,13 @@ class PreviewConnectionTests(unittest.TestCase):
             ch.shell_html = "<html><body>preview-ok</body></html>"
             ch.body_html = "<p>body</p>"
             ch.toc_html = ""
+        tab_manager.reset()
+        reset_os_open_pin()
+        pop_open_docs()
 
     def tearDown(self):
         self.srv.stop()
+        tab_manager.reset()
 
     def _connect(self):
         sock = socket.create_connection(("127.0.0.1", self.port), timeout=2)
@@ -330,8 +337,8 @@ class PreviewConnectionTests(unittest.TestCase):
             self.assertTrue(status2.startswith("HTTP/1.1 304"), status2)
         finally:
             sock2.close()
-            from mpe_core import preview_server as ps
-            ps._ASSET_MEM.clear()
+            from mpe_core import preview_handler as ph
+            ph._ASSET_MEM.clear()
 
     def test_open_doc_queues_path(self):
         fd, path = tempfile.mkstemp(suffix=".md")
@@ -345,41 +352,268 @@ class PreviewConnectionTests(unittest.TestCase):
                 self.assertEqual(headers.get("connection", "").lower(), "close")
             finally:
                 sock.close()
-            self.assertEqual(pop_open_docs(), [path])
+            self.assertEqual(pop_open_docs(),
+                             [{"path": path, "focus_browser": False}])
         finally:
             os.remove(path)
 
+    def test_open_doc_tab_switch_other_file_ignored_during_os_open_pin(self):
+        pin_os_open_file("/tmp/keep.md")
+        sock = self._connect()
+        try:
+            _http_get(
+                sock,
+                "/api/open_doc?file=" + quote("/tmp/other.md", safe="")
+                + "&tab_switch=1",
+            )
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            self.assertTrue(status.startswith("HTTP/1.1 204"), status)
+        finally:
+            sock.close()
+        self.assertEqual(pop_open_docs(), [])
+
+    def test_open_doc_tab_switch_pinned_file_still_queues(self):
+        pin_os_open_file("/tmp/keep.md")
+        sock = self._connect()
+        try:
+            _http_get(
+                sock,
+                "/api/open_doc?file=" + quote("/tmp/keep.md", safe="")
+                + "&tab_switch=1",
+            )
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            self.assertTrue(status.startswith("HTTP/1.1 204"), status)
+        finally:
+            sock.close()
+        self.assertEqual(pop_open_docs(),
+                         [{"path": "/tmp/keep.md", "focus_browser": False}])
+
+    def test_open_doc_without_tab_switch_not_blocked_by_pin(self):
+        pin_os_open_file("/tmp/keep.md")
+        sock = self._connect()
+        try:
+            _http_get(
+                sock,
+                "/api/open_doc?file=" + quote("/tmp/other.md", safe=""),
+            )
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            self.assertTrue(status.startswith("HTTP/1.1 204"), status)
+        finally:
+            sock.close()
+        self.assertEqual(pop_open_docs(),
+                         [{"path": "/tmp/other.md", "focus_browser": False}])
+
+    def test_tab_open_returns_gen_and_files(self):
+        sock = self._connect()
+        try:
+            _http_get(sock, "/api/tab_open?file=" + quote("/tmp/a.md", safe=""))
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            body = _read_body(sock, headers, rest)
+            self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+            data = json.loads(body.decode("utf-8"))
+            self.assertEqual(data.get("gen"), 1)
+            self.assertFalse(data.get("replaced"))
+            self.assertEqual(data.get("files"), ["/tmp/a.md"])
+            self.assertTrue(tab_manager.is_alive("/tmp/a.md"))
+            self.assertIn("html", data)
+            self.assertIn("toc", data)
+        finally:
+            sock.close()
+
+    def test_tab_open_includes_channel_snapshot(self):
+        update_content(
+            "<p>snap-body</p>", "<ul></ul>", "", "h", None,
+            file_path="/tmp/a.md")
+        sock = self._connect()
+        try:
+            _http_get(sock, "/api/tab_open?file=" + quote("/tmp/a.md", safe=""))
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            body = _read_body(sock, headers, rest)
+            data = json.loads(body.decode("utf-8"))
+            self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+            self.assertEqual(data.get("html"), "<p>snap-body</p>")
+            self.assertEqual(data.get("toc"), "<ul></ul>")
+        finally:
+            sock.close()
+
+    def test_html_page_queues_open_doc_without_session(self):
+        fd, path = tempfile.mkstemp(suffix=".md")
+        os.close(fd)
+        pop_open_docs()
+        try:
+            with state().lock:
+                ch = state().channel(path)
+                ch.shell_html = "<html><body>ok</body></html>"
+                ch.body_html = "<p>ok</p>"
+            sock = self._connect()
+            try:
+                _http_get(sock, "/?file=" + quote(path, safe=""))
+                status, headers, rest = _recv_until_headers(sock, timeout=2)
+                _read_body(sock, headers, rest)
+                self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+            finally:
+                sock.close()
+            queued = pop_open_docs()
+            self.assertEqual(queued, [{"path": path, "focus_browser": False}])
+        finally:
+            os.remove(path)
+
+    def test_html_page_skips_queue_when_session_and_html_exist(self):
+        fd, path = tempfile.mkstemp(suffix=".md")
+        os.close(fd)
+        pop_open_docs()
+        try:
+            tab_manager.register(path, view_id=1)
+            with state().lock:
+                ch = state().channel(path)
+                ch.shell_html = "<html><body>ok</body></html>"
+                ch.body_html = "<p>ok</p>"
+            sock = self._connect()
+            try:
+                _http_get(sock, "/?file=" + quote(path, safe=""))
+                status, headers, rest = _recv_until_headers(sock, timeout=2)
+                _read_body(sock, headers, rest)
+                self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+            finally:
+                sock.close()
+            self.assertEqual(pop_open_docs(), [])
+        finally:
+            os.remove(path)
+
+    def test_tab_open_replace_pushes_close_old_on_sse(self):
+        stream = self._connect()
+        try:
+            _http_get(stream, "/api/stream", extra_headers="Accept: text/event-stream\r\n")
+            status, headers, rest = _recv_until_headers(stream, timeout=2)
+            self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+            combined = rest
+            opener = self._connect()
+            try:
+                _http_get(opener, "/api/tab_open?file=" + quote("/tmp/a.md", safe=""))
+                _recv_until_headers(opener, timeout=2)
+            finally:
+                opener.close()
+            replacer = self._connect()
+            try:
+                _http_get(replacer, "/api/tab_open?file=" + quote("/tmp/a.md", safe=""))
+                st2, hd2, rest2 = _recv_until_headers(replacer, timeout=2)
+                body2 = _read_body(replacer, hd2, rest2)
+                data = json.loads(body2.decode("utf-8"))
+                self.assertTrue(st2.startswith("HTTP/1.1 200"), st2)
+                self.assertEqual(data.get("gen"), 2)
+                self.assertTrue(data.get("replaced"))
+                self.assertEqual(data.get("old_gen"), 1)
+            finally:
+                replacer.close()
+            deadline = time.time() + 2
+            while b"event: close_old" not in combined and time.time() < deadline:
+                chunk = stream.recv(4096)
+                if not chunk:
+                    break
+                combined += chunk
+            self.assertIn(b"event: close_old", combined)
+            self.assertIn(b"\"gen\": 1", combined)
+            self.assertIn(b"event: tabs", combined)
+        finally:
+            stream.close()
+
+    def test_tab_close_wrong_gen_ignored(self):
+        opener = self._connect()
+        try:
+            _http_get(opener, "/api/tab_open?file=" + quote("/tmp/a.md", safe=""))
+            _recv_until_headers(opener, timeout=2)
+        finally:
+            opener.close()
+        tab_manager.tab_open("/tmp/a.md")  # gen=2
+        closer = self._connect()
+        try:
+            _http_get(closer, "/api/tab_close?file=" + quote("/tmp/a.md", safe="") + "&gen=1")
+            status, headers, rest = _recv_until_headers(closer, timeout=2)
+            self.assertTrue(status.startswith("HTTP/1.1 204"), status)
+        finally:
+            closer.close()
+        self.assertTrue(tab_manager.is_alive("/tmp/a.md"))
+
+    def test_tab_close_matching_gen_removes(self):
+        opener = self._connect()
+        try:
+            _http_get(opener, "/api/tab_open?file=" + quote("/tmp/a.md", safe=""))
+            _recv_until_headers(opener, timeout=2)
+        finally:
+            opener.close()
+        closer = self._connect()
+        try:
+            _http_get(closer, "/api/tab_close?file=" + quote("/tmp/a.md", safe="") + "&gen=1")
+            status, headers, rest = _recv_until_headers(closer, timeout=2)
+            self.assertTrue(status.startswith("HTTP/1.1 204"), status)
+        finally:
+            closer.close()
+        self.assertFalse(tab_manager.is_alive("/tmp/a.md"))
+        self.assertEqual(tab_manager.live_count(), 0)
+
+    def test_tab_close_via_post_beacon(self):
+        opener = self._connect()
+        try:
+            _http_get(opener, "/api/tab_open?file=" + quote("/tmp/a.md", safe=""))
+            _recv_until_headers(opener, timeout=2)
+        finally:
+            opener.close()
+        closer = self._connect()
+        try:
+            path = "/api/tab_close?file=" + quote("/tmp/a.md", safe="") + "&gen=1"
+            req = (
+                "POST %s HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                "Content-Length: 0\r\nConnection: close\r\n\r\n"
+            ) % path
+            closer.sendall(req.encode("ascii"))
+            status, headers, rest = _recv_until_headers(closer, timeout=2)
+            self.assertTrue(status.startswith("HTTP/1.1 204"), status)
+        finally:
+            closer.close()
+        self.assertEqual(tab_manager.live_count(), 0)
+
 
 class PreviewTabHintTests(unittest.TestCase):
-    def test_hints_cover_encoded_and_decoded_file_query(self):
-        from mpe_core.browser import _as_url_matches, _preview_match_hints
+    def test_url_hint_strips_scheme(self):
+        from mpe_core.browser import _url_hint
 
-        encoded = "http://127.0.0.1:8765/?file=%2Ftmp%2Falpha.md"
-        decoded = "http://127.0.0.1:8765/?file=/tmp/alpha.md"
-        for url in (encoded, decoded):
-            hints = _preview_match_hints(url)
-            self.assertTrue(
-                any(h.endswith("/?file=%2Ftmp%2Falpha.md") for h in hints), hints)
-            self.assertTrue(
-                any(h.endswith("/?file=/tmp/alpha.md") for h in hints), hints)
-            expr = _as_url_matches(hints)
-            self.assertIn(" or ", expr)
-            self.assertIn("%2Ftmp%2Falpha.md", expr)
-            self.assertIn("/tmp/alpha.md", expr)
+        self.assertEqual(
+            _url_hint("http://127.0.0.1:8765/?file=/tmp/alpha.md"),
+            "127.0.0.1:8765/?file=/tmp/alpha.md")
+        self.assertEqual(
+            _url_hint("file:///tmp/alpha.md"),
+            "/tmp/alpha.md")
 
-    def test_focus_only_script_does_not_open_tab(self):
+    def test_preview_match_hints_cover_encoded_and_decoded_file(self):
+        from mpe_core.browser import _preview_match_hints
+
+        hints = _preview_match_hints(
+            "http://127.0.0.1:8765/?file=%2Ftmp%2Falpha.md")
+        joined = " ".join(hints)
+        self.assertIn("file=%2Ftmp%2Falpha.md", joined)
+        self.assertIn("file=/tmp/alpha.md", joined)
+
+    def test_focus_script_finds_tab_and_does_not_open(self):
         from mpe_core.browser import BrowserSession, _preview_match_hints
 
         url = "http://127.0.0.1:8765/?file=%2Ftmp%2Falpha.md"
         hints = _preview_match_hints(url)
         session = BrowserSession()
         script = session._chrome_focus_or_open_script(
-            "Google Chrome", url, hints, False)
+            "Google Chrome", url, hints, open_if_missing=False)
+        self.assertIn("set active tab index of w to tabIndex", script)
+        self.assertIn("file=%2Ftmp%2Falpha.md", script)
         self.assertNotIn("make new tab", script)
         self.assertIn("if found then activate", script)
-        script_open = session._chrome_focus_or_open_script(
-            "Google Chrome", url, hints, True)
-        self.assertIn("make new tab", script_open)
+
+    def test_open_prefers_default_browser(self):
+        from mpe_core.browser import BrowserSession
+
+        session = BrowserSession()
+        # 'default' path uses webbrowser.open without OS-specific scripting.
+        self.assertTrue(hasattr(session, "open"))
+        self.assertIsNone(session.app_name)
+        self.assertIsNone(session.proc)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ import os
 
 # release.sh 发版时改为 False;master 开发保持 True。
 DEBUG = True
-
+DEBUG_PATH="~/Downloads/MarkdownPreviewEnhanced/debug.log"
 _PREFIX = "[MarkdownPreviewEnhanced]"
 _PATH = None
 
@@ -32,13 +32,33 @@ def _want_debug():
 
 
 def _file_path():
+    """DEBUG=True 时统一写到 ~/Downloads/MarkdownPreviewEnhanced/debug.log,
+    方便开发期查看。发版时 DEBUG=False,走 config.output_dir() 路径。
+    用户设置 "debug": true 时也走 Downloads 路径。
+    """
     if _PATH:
         return _PATH
+    try:
+        if _want_debug():
+            return os.path.expanduser(DEBUG_PATH)
+    except Exception:
+        pass
     try:
         from . import config
         return config.debug_log_path()
     except Exception:
-        return os.path.expanduser("~/Downloads/MarkdownPreviewEnhanced/debug.log")
+        return os.path.expanduser(DEBUG_PATH)
+
+
+def clear():
+    """Truncate the debug log file (called on plugin_loaded)."""
+    try:
+        path = _file_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("")
+    except Exception:
+        pass
 
 
 def _write_file(msg):
@@ -49,6 +69,7 @@ def _write_file(msg):
         with open(path, "a", encoding="utf-8") as f:
             f.write("[%s] %s\n" % (ts, msg))
     except Exception:
+        print("write_log failed")
         pass
 
 
