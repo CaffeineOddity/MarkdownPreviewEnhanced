@@ -1,24 +1,15 @@
-"""Unified mapping between ST editor views, document file paths, preview URLs,
-and browser tabs.
+"""Unified mapping: file_path ↔ ST view_id ↔ browser tab (1:1:1).
 
-Before this module existed, the file_path ↔ view ↔ channel ↔ url mapping was
-spread across ``preview_state._bound_views``, ``preview_state._bound_view_id``,
-``preview_state._pending_link_opens``, ``preview_url.preview_url()``, and
-``preview_state_core._STATE.channels``.  All of that is now funneled through
-here so there is a single place to ask "which view is this file?" or "what URL
-opens this file?" or "which file does this tab show?".
+This module is the registry.  SSE/HTTP start-stop lives in ``preview_state``.
+Browser tabs announce themselves via ``/api/tab_open`` / ``/api/tab_close``;
+those handlers call ``tab_open`` / ``tab_close`` here.
 
-Design notes
-------------
-- **ST side** (this module): ``file_path ↔ view_id`` mapping.
-- **Server side** (``preview_state_core._STATE.channels``): ``file_path ↔ channel``.
-- **Browser side** (``preview.js``): ``?file= ↔ tab`` (channelFile + openTabs).
-- This module does NOT own the browser-side tab list; it only owns the ST-side
-  mapping and the URL construction.  The browser side is notified via the
-  server (SSE / HTTP API), never directly by this module.
+A row exists from ``register`` (Cmd+Shift+M, before OS-open) or ``tab_open``
+(page load).  ``alive`` is True only after ``tab_open``.  Closing a tab deletes
+the row when ``gen`` matches, so a stale close cannot drop the replacement tab.
 """
-import os
 import threading
+import time
 from urllib.parse import quote as _quote
 
 import sublime
@@ -30,7 +21,10 @@ from .preview_server import SERVER
 
 # ── internal state ───────────────────────────────────────────────────────────
 
-_bound_views = {}            # file_path (str) -> view.id() (int)
+_lock = threading.Lock()
+# file_path -> {view_id, gen, alive, ts}
+_tabs = {}
+_bound_views = {}            # file_path (str) -> view.id() (int); ST-side cache
 _bound_view_id = None        # "current" view.id() - used by on_selection_modified
 _pending_link_opens = set()  # file paths waiting for on_load_async
 
@@ -40,7 +34,8 @@ _pending_link_opens = set()  # file paths waiting for on_load_async
 def bind_view(view):
     """Record that *view* is the active editor for its file_path.
 
-    Called from ``render.publish`` after rendering a view.
+    Called from ``render.publish`` after rendering a view.  Last activated
+    view wins when the same file is open in a split.
     """
     global _bound_view_id
     if view is None:
@@ -49,12 +44,21 @@ def bind_view(view):
     log.debug(f"bind_view ==> {fp}")
     if fp:
         _bound_views[fp] = view.id()
+        with _lock:
+            rec = _tabs.get(fp)
+            if rec is not None:
+                rec["view_id"] = view.id()
     _bound_view_id = view.id()
 
 
 def get_view_id_for_file(file_path):
     """Return the view.id() bound to *file_path*, or None."""
-    return _bound_views.get(file_path or "")
+    fp = file_path or ""
+    with _lock:
+        rec = _tabs.get(fp)
+        if rec and rec.get("view_id") is not None:
+            return rec["view_id"]
+    return _bound_views.get(fp)
 
 
 def get_bound_view_id():
@@ -109,6 +113,117 @@ def has_pending_opens():
     return bool(_pending_link_opens)
 
 
+# ── file_path ↔ browser tab (generation / liveness) ─────────────────────────
+
+def register(file_path, view_id=None):
+    """Ensure a registry row. Does not mark the browser tab alive."""
+    if not file_path:
+        return
+    with _lock:
+        rec = _tabs.get(file_path)
+        if rec is None:
+            _tabs[file_path] = {
+                "view_id": view_id,
+                "gen": 0,
+                "alive": False,
+                "ts": time.time(),
+            }
+        else:
+            if view_id is not None:
+                rec["view_id"] = view_id
+            rec["ts"] = time.time()
+    if view_id is not None:
+        _bound_views[file_path] = view_id
+
+
+def tab_open(file_path):
+    """Mark *file_path* as having a live browser tab. Bump generation.
+
+    Returns a dict ``{file, gen, old_gen, replaced, files}``, or None if
+    *file_path* is empty.
+    """
+    if not file_path:
+        return None
+    with _lock:
+        rec = _tabs.get(file_path)
+        old_gen = rec["gen"] if rec and rec.get("alive") else None
+        if rec is None:
+            rec = {"view_id": None, "gen": 0, "alive": False, "ts": time.time()}
+            _tabs[file_path] = rec
+        rec["gen"] = int(rec.get("gen") or 0) + 1
+        rec["alive"] = True
+        rec["ts"] = time.time()
+        files = _live_files_unlocked()
+        return {
+            "file": file_path,
+            "gen": rec["gen"],
+            "old_gen": old_gen,
+            "replaced": old_gen is not None,
+            "files": files,
+        }
+
+
+def tab_close(file_path, gen):
+    """Remove the row if *gen* matches the current generation. Idempotent."""
+    if not file_path:
+        return False
+    try:
+        gen = int(gen)
+    except (TypeError, ValueError):
+        return False
+    with _lock:
+        rec = _tabs.get(file_path)
+        if rec is None:
+            return False
+        if int(rec.get("gen") or 0) != gen:
+            return False
+        _tabs.pop(file_path, None)
+        return True
+
+
+def is_alive(file_path):
+    if not file_path:
+        return False
+    with _lock:
+        rec = _tabs.get(file_path)
+        return bool(rec and rec.get("alive"))
+
+
+def live_count():
+    with _lock:
+        return sum(1 for rec in _tabs.values() if rec.get("alive"))
+
+
+def live_files():
+    with _lock:
+        return _live_files_unlocked()
+
+
+def session_count():
+    """Rows including pending (registered, not yet tab_open)."""
+    with _lock:
+        return len(_tabs)
+
+
+def drop_stale_pending(max_age=15.0):
+    """Drop register-only rows that never got a tab_open. Returns dropped count."""
+    now = time.time()
+    dropped = 0
+    with _lock:
+        stale = [
+            fp for fp, rec in _tabs.items()
+            if not rec.get("alive") and (now - rec.get("ts", 0)) > max_age
+        ]
+        for fp in stale:
+            _tabs.pop(fp, None)
+            dropped += 1
+    return dropped
+
+
+def _live_files_unlocked():
+    return sorted(fp for fp, rec in _tabs.items() if rec.get("alive"))
+
+
 # ── file_path ↔ URL ──────────────────────────────────────────────────────────
 
 def preview_url(file_path=None):
@@ -143,6 +258,8 @@ def channel_has_content(file_path):
 def reset():
     """Clear all bindings (called on close / plugin unload)."""
     global _bound_view_id
+    with _lock:
+        _tabs.clear()
     _bound_views.clear()
     _bound_link_opens_clear()
     _bound_view_id = None

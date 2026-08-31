@@ -1,8 +1,8 @@
-"""Preview session state, SSE-driven server lifecycle, and background poller.
+"""Preview session state, tab-count server lifecycle, and background poller.
 
-Owns the ``_preview_open`` flag, SSE idle timer, and the background tick
-that drains browser requests and shuts the server down when SSE goes away.
-File_path ↔ view ↔ URL mappings live in ``tab_manager``.
+HTTP/SSE stay up while ``tab_manager`` has any session row (pending register
+or live tab).  They stop after the last tab closes (STOP_GRACE covers F5)
+or when live tabs exist but SSE is gone for CRASH_IDLE (browser crash).
 """
 import os
 import threading
@@ -25,9 +25,11 @@ from .preview_server import (
 # ── session state ────────────────────────────────────────────────────────────
 
 _preview_open = False
-_last_browser_open = 0.0     # ts of last browser open; SSE grace window
-_sse_dead_since = None       # ts when SSE first went missing
-SSE_IDLE_SECONDS = 10        # stop server after this many s with no SSE
+_last_browser_open = 0.0     # ts of last OS-open (diagnostics)
+_sse_dead_since = None       # ts when SSE first went missing while tabs alive
+_empty_since = None          # ts when session_count first hit 0
+STOP_GRACE = 2.0             # wait after last tab_close before stop (F5)
+CRASH_IDLE = 60.0            # live tabs but no SSE: assume crash
 
 _scroll_timer = None
 
@@ -71,6 +73,12 @@ def ensure_server():
     url = SERVER.start(port=port, log=server_log)
     if not url:
         log.error("failed to start preview server on port %s" % port)
+        return None
+    global _preview_open, _empty_since, _sse_dead_since
+    _preview_open = True
+    _empty_since = None
+    _sse_dead_since = None
+    start_scroll_poller()
     return url
 
 
@@ -86,6 +94,9 @@ def stop_server():
 # ── preview-liveness checks ─────────────────────────────────────────────────
 
 def is_preview_open():
+    """True while the HTTP server is up (a preview session exists)."""
+    if config.get("use_local_server", True):
+        return bool(_preview_open and SERVER.running)
     return _preview_open
 
 
@@ -95,27 +106,12 @@ def set_preview_open(value):
 
 
 def preview_alive():
-    """True if we believe the live preview session is still usable.
+    """True if the preview HTTP session is still running.
 
-    SSE 已断开时只有「刚 open、等 EventSource 连上」这 3 秒算活着,
-    用来挡住同一轮 loading+正文 开两个标签.
+    Liveness is tab-registry + server, not a 3s SSE guess.  Missing SSE
+    while tabs are alive is handled by CRASH_IDLE in ``_tick``.
     """
-    global _preview_open
-    if not _preview_open:
-        return False
-    if config.get("use_local_server", True) and not SERVER.running:
-        log.debug("preview flag was set but server is down; treating as closed")
-        _preview_open = False
-        return False
-    if config.get("use_local_server", True) and not has_active_sse_connection():
-        age = time.time() - _last_browser_open
-        if age > 3:
-            log.debug("no preview page connected via SSE; treating as closed")
-            _preview_open = False
-            return False
-        log.debug("no SSE yet; within open grace (%.2fs) - not a live tab" % age)
-        return True
-    return True
+    return is_preview_open()
 
 
 # ── browser-tab coordination ─────────────────────────────────────────────────
@@ -128,15 +124,14 @@ def mark_browser_open():
 
 
 def close_preview_ui(stop_server=False):
-    """Close browser window and optionally stop the local server.
-
-    stop_server=False (default): close the browser tab(s) but keep the
-    HTTP server running - it will be stopped by the idle poller when the
-    SSE connection stays gone for SSE_IDLE_SECONDS. Pass True only on
-    plugin_unloaded (ST exit must release the port immediately).
+    """Ask preview tabs to close themselves. Server stops via STOP_GRACE
+    unless *stop_server* is True (plugin unload).
     """
     global _preview_open
+    from .preview_state_core import close_browser_tabs
     from .browser import BrowserSession
+    close_browser_tabs()
+    tab_manager.reset()
     _browser = BrowserSession()
     hint = None
     if SERVER.running and SERVER.port:
@@ -144,9 +139,9 @@ def close_preview_ui(stop_server=False):
     else:
         hint = config.preview_path()
     _browser.close(preview_file_hint=hint, log=browser_log)
-    _preview_open = False
-    stop_scroll_poller()
     if stop_server:
+        _preview_open = False
+        stop_scroll_poller()
         stop_server_internal()
     log.info("preview closed (server %s)" % ("stopped" if stop_server else "kept"))
 
@@ -177,12 +172,10 @@ _suppress_st_to_web_until = 0.0
 
 
 def suppress_st_to_web(value):
-    """Set the direction guard (True while handling a WEB->ST doc switch)."""
+    """Arm the direction guard. False is a no-op so a 2s window is not cleared."""
     global _suppress_st_to_web_until
     if value:
         _suppress_st_to_web_until = time.time() + 2.0
-    else:
-        _suppress_st_to_web_until = 0.0
 
 
 def is_st_to_web_suppressed():
@@ -192,19 +185,13 @@ def is_st_to_web_suppressed():
 def open_doc_from_browser(path, focus_browser=True):
     """Browser notified us: user switched to a doc's preview tab.
 
-    The browser tab is already in front (the user clicked it), so we only
-    switch the ST editor.  ``focus_browser`` is kept for API compatibility
-    but no OS-level browser focusing happens (cross-platform).
+    Only switch the ST editor. Never OS-open a browser tab.
     """
+    suppress_st_to_web(True)
     if tab_manager.focus_view_for_file(path):
         v = tab_manager.find_view_by_file(path)
-        # Focus the ST view; suppress the ST->WEB echo so we don't loop.
-        suppress_st_to_web(True)
-        try:
-            from .render import render_view
-            render_view(v, force=True, open_browser=False)
-        finally:
-            suppress_st_to_web(False)
+        from .render import render_view
+        render_view(v, force=True, open_browser=False)
         return
     tab_manager.add_pending_open(path)
     sublime.active_window().open_file(path)
@@ -213,12 +200,7 @@ def open_doc_from_browser(path, focus_browser=True):
 # ── background poller ───────────────────────────────────────────────────────
 
 def start_scroll_poller():
-    """Background tick: SSE-driven server shutdown + browser-request drain.
-
-    Polls every ~100ms. The HTTP server stays alive as long as the
-    leader tab's SSE connection is open. When SSE goes away (all preview
-    tabs closed), we wait SSE_IDLE_SECONDS before stopping the server.
-    """
+    """Background tick: tab-count shutdown + browser-request drain."""
     global _scroll_timer
     if not config.get("use_local_server", True):
         return
@@ -227,47 +209,60 @@ def start_scroll_poller():
 
     def _tick():
         global _scroll_timer, _preview_open
-        global _sse_dead_since
+        global _sse_dead_since, _empty_since
         _scroll_timer = None
         if not _preview_open:
             return
 
-        # ── SSE-driven server shutdown ──────────────────────────────
         if SERVER.running:
             try:
-                if has_active_sse_connection():
+                tab_manager.drop_stale_pending(max_age=30.0)
+                now = time.time()
+                sessions = tab_manager.session_count()
+                live = tab_manager.live_count()
+                if sessions == 0:
                     _sse_dead_since = None
-                else:
-                    now = time.time()
-                    if _sse_dead_since is None:
-                        _sse_dead_since = now
-                        log.info("SSE connection gone - starting %ds idle timer"
-                                 % SSE_IDLE_SECONDS)
-                    elapsed = now - _sse_dead_since
-                    if elapsed >= SSE_IDLE_SECONDS:
-                        log.info("no SSE for %.0fs - stopping preview server"
-                                 % elapsed)
+                    if _empty_since is None:
+                        _empty_since = now
+                        log.debug("no preview tabs - starting %.0fs stop grace"
+                                  % STOP_GRACE)
+                    elif now - _empty_since >= STOP_GRACE:
+                        log.info("all preview tabs closed - stopping HTTP server")
                         _preview_open = False
-                        _sse_dead_since = None
+                        _empty_since = None
                         stop_server_internal()
                         return
-            except Exception:
-                pass
+                else:
+                    _empty_since = None
+                    if live > 0 and not has_active_sse_connection():
+                        if _sse_dead_since is None:
+                            _sse_dead_since = now
+                            log.info("SSE gone with live tabs - crash idle %ds"
+                                     % int(CRASH_IDLE))
+                        elif now - _sse_dead_since >= CRASH_IDLE:
+                            log.info("no SSE for %.0fs - stopping HTTP server"
+                                     % (now - _sse_dead_since))
+                            tab_manager.reset()
+                            _preview_open = False
+                            _sse_dead_since = None
+                            stop_server_internal()
+                            return
+                    else:
+                        _sse_dead_since = None
+            except Exception as e:
+                log.error("preview tick lifecycle failed: %s" % e)
 
-        # Scroll sync is unidirectional: ST -> browser only.
-        # Drain browser scroll reports so they don't pile up.
         try:
             pop_browser_lines()
         except Exception:
             pass
 
-        # Browser -> ST doc switch (sidebar tab click or native tab switch)
         try:
             docs = pop_open_docs()
             if docs:
-                items = [(d["path"], d.get("focus_browser", True)) for d in docs]
+                items = [(d["path"], d.get("focus_browser", False)) for d in docs]
                 for path, fb in items:
-                    log.debug("open doc from browser link: %s (focus_browser=%s)"
+                    log.debug("open doc from browser: %s (focus_browser=%s)"
                               % (path, fb))
                 sublime.set_timeout(
                     lambda: [open_doc_from_browser(p, focus_browser=fb)

@@ -3,10 +3,12 @@
 URL construction is delegated to ``tab_manager.preview_url`` so there is
 a single source of truth for file_path ↔ URL mapping.
 
-Tab focusing between ST and the browser is handled in the browser itself:
-- ST -> WEB: SSE ``switchTab`` -> matching tab calls ``window.open('', name)``
+Tab focusing:
+- ST -> WEB: AppleScript focuses the existing tab by URL (macOS); SSE
+  ``switchTab`` is still pushed for JS. Never OS-opens a second tab.
 - WEB -> ST: ``notifyDocSwitch`` -> ``/api/open_doc``
-No OS-level browser scripting (AppleScript) is used - cross-platform.
+- In-page Preview Tabs click uses ``window.open(url, name)`` (user gesture);
+  a miss creates a tab that ``tab_open``/``close_old`` takes over.
 """
 import threading
 
@@ -22,8 +24,8 @@ _browser = BrowserSession()
 def open_preview_browser(url, focus_existing):
     """Open a preview tab. Runs in a background thread.
 
-    ``focus_existing`` is accepted for API compatibility; tab reuse is
-    handled in the browser (stable URL + window.name) not via OS scripting.
+    Caller must only invoke this when the file has no live tab.
+    ``focus_existing`` is accepted for API compatibility.
     """
     preview_state.mark_browser_open()
     preferred = config.get("browser", "auto") or "auto"
@@ -44,3 +46,21 @@ def open_preview_browser(url, focus_existing):
 
     threading.Thread(target=_work, daemon=True).start()
     preview_state.start_scroll_poller()
+
+
+def focus_preview_tab(file_path):
+    """Bring the existing preview tab for *file_path* to the front. No new tab."""
+    if not file_path:
+        return
+    url = tab_manager.preview_url(file_path)
+    log.debug("focus existing preview tab: %s" % url)
+
+    def _work():
+        try:
+            ok = _browser.focus_existing_tab(url, log=preview_state.browser_log)
+            if not ok:
+                log.debug("focus existing tab missed: %s" % url)
+        except Exception as e:
+            log.error("focus existing tab failed: %s" % e)
+
+    threading.Thread(target=_work, daemon=True).start()

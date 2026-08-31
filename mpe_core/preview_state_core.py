@@ -217,8 +217,8 @@ def set_output_dir(path):
 def set_active_doc(file_path=None):
     """ST->WEB: push 'switchTab' SSE event so the matching browser tab focuses itself.
 
-    The matching tab (data.file === channelFile) calls window.open('', ownName)
-    to bring itself to the front. Cross-platform - no AppleScript.
+    The matching tab (data.file === channelFile) calls window.focus().
+    Cross-platform - no AppleScript.
     """
     import json as _json
     with _STATE.lock:
@@ -226,8 +226,68 @@ def set_active_doc(file_path=None):
         payload = _json.dumps({}, ensure_ascii=False)
     ch._notify_sse("switchTab", payload)
 
-def queue_open_doc(path, focus_browser=True):
-    """Queue an absolute .md path for the plugin to open as a standard preview."""
+
+def _push_all_sse(event_type, payload_json, file_key=""):
+    """Fan an event out to every SSE listener (global + per-channel)."""
+    wrapped = _json_with_file(payload_json, file_key)
+    with _STATE.lock:
+        targets = list(_STATE.global_sse_queues)
+        for ch in _STATE.channels.values():
+            targets.extend(ch.sse_queues)
+        dead = []
+        for q in targets:
+            try:
+                q.put_nowait((event_type, wrapped))
+            except queue.Full:
+                dead.append(q)
+        for q in dead:
+            if q in _STATE.global_sse_queues:
+                _STATE.global_sse_queues.remove(q)
+            else:
+                for ch in _STATE.channels.values():
+                    if q in ch.sse_queues:
+                        ch.sse_queues.remove(q)
+                        break
+
+
+def notify_close_old(file_path, gen):
+    payload = json.dumps({"gen": int(gen)}, ensure_ascii=False)
+    _push_all_sse("close_old", payload, file_path)
+
+
+def notify_tabs(files=None):
+    from . import tab_manager
+    if files is None:
+        files = tab_manager.live_files()
+    payload = json.dumps({"files": list(files)}, ensure_ascii=False)
+    _push_all_sse("tabs", payload, "")
+
+
+def handle_tab_open(file_path):
+    """Register a live browser tab. Returns the tab_open result dict."""
+    from . import tab_manager
+    result = tab_manager.tab_open(file_path)
+    if result is None:
+        return None
+    if result.get("replaced"):
+        notify_close_old(file_path, result["old_gen"])
+    notify_tabs(result.get("files"))
+    return result
+
+
+def handle_tab_close(file_path, gen):
+    from . import tab_manager
+    removed = tab_manager.tab_close(file_path, gen)
+    notify_tabs()
+    return removed
+
+
+def queue_open_doc(path, focus_browser=False):
+    """Queue an absolute .md path for the plugin to open as a standard preview.
+
+    ``focus_browser`` is unused for OS-open (tabs are 1:1 via the registry);
+    kept so queued items still carry the flag for logging.
+    """
     with _STATE.lock:
         for item in _STATE.pending_open_docs:
             if item["path"] == path:

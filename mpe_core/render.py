@@ -5,9 +5,8 @@ the preview shell (via ``html_builder``), pushes the result to the HTTP
 server (SSE fan-out) and/or disk, and optionally opens the browser.
 
 This module is the single entry point for "render this view and update
-the preview".  It does **not** own session state - that lives in
-``preview_state`` - but it reads from it (``preview_alive``,
-``mark_browser_open``, ``open_preview_browser``).
+the preview".  It never OS-opens a browser tab — that is Toggle's job
+when the file has no live tab.
 """
 import os
 import threading
@@ -22,7 +21,6 @@ from . import tab_manager
 from .html_builder import build_preview_shell
 from .md_renderer import render as render_markdown
 from .preview_server import (
-    SERVER,
     has_active_sse_connection,
     set_output_dir,
     update_content,
@@ -145,20 +143,10 @@ def publish(result, view, force_open=False):
 
     _write_files(shell, body)
 
-    sse_live = has_active_sse_connection()
-    if force_open or not preview_state.is_preview_open():
-        file_path = view.file_name() if view is not None else None
-        url = tab_manager.preview_url(file_path)
-        if view is not None:
-            tab_manager.bind_view(view)
-        log.debug("preview ready: %s" % url)
-        from .preview_url import open_preview_browser
-        open_preview_browser(url, True)
-    else:
-        log.debug(
-            "skip browser open (force_open=%s preview_open=%s sse=%s)"
-            % (force_open, preview_state.is_preview_open(), sse_live)
-        )
+    log.debug(
+        "content published (force_open=%s preview_open=%s sse=%s)"
+        % (force_open, preview_state.is_preview_open(), has_active_sse_connection())
+    )
 
 
 def render_view(view, force=False, open_browser=False, focus_browser=False):
@@ -213,15 +201,7 @@ def render_view(view, force=False, open_browser=False, focus_browser=False):
 
         def _done():
             try:
-                sse_live = has_active_sse_connection()
-                awaiting = preview_state.preview_alive()
-                need_open = (open_browser and not sse_live and not awaiting) or focus_browser
-                if open_browser and not sse_live and awaiting:
-                    log.debug(
-                        "content publish: SSE dead but in open grace; "
-                        "not opening a second tab"
-                    )
-                publish(result, view, force_open=need_open)
+                publish(result, view, force_open=False)
             except Exception:
                 log.error("publish failed:\n%s" % traceback.format_exc())
 

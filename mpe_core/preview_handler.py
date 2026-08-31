@@ -107,6 +107,12 @@ class PreviewHandler(BaseHTTPRequestHandler):
         if path == "/api/open_doc":
             self._api_open_doc(parsed.query)
             return
+        if path == "/api/tab_open":
+            self._api_tab_open(parsed.query)
+            return
+        if path == "/api/tab_close":
+            self._api_tab_close(parsed.query)
+            return
         if path.startswith("/doc/"):
             self._serve_doc(path[len("/doc/"):])
             return
@@ -119,6 +125,12 @@ class PreviewHandler(BaseHTTPRequestHandler):
         _core.touch_activity()
         parsed = urlparse(self.path)
         _core.get_log()("WEB->ST POST %s" % parsed.path)
+        if parsed.path == "/api/tab_close":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            if length:
+                self.rfile.read(length)
+            self._api_tab_close(parsed.query)
+            return
         if parsed.path == "/api/browser_scroll":
             length = int(self.headers.get("Content-Length", 0) or 0)
             raw = self.rfile.read(length) if length else b"{}"
@@ -163,7 +175,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
             ch = _core._STATE.channels.get(q)
             if ch is not None and (ch.shell_html or ch.body_html):
                 return True
-        _core.queue_open_doc(q)
+        _core.queue_open_doc(q, focus_browser=False)
         return True
 
     def _serve_query_error(self, query):
@@ -237,7 +249,36 @@ class PreviewHandler(BaseHTTPRequestHandler):
             return
         params = parse_qs(query)
         tab_switch = params.get("tab_switch", ["0"])[0] == "1"
-        _core.queue_open_doc(file_key, focus_browser=not tab_switch)
+        _core.queue_open_doc(file_key, focus_browser=False)
+        _core.get_log()("open_doc file=%s tab_switch=%s" % (file_key, tab_switch))
+        self.send_response(204)
+        self._cors()
+        self.end_headers()
+
+    def _api_tab_open(self, query):
+        file_key = _core._file_key_from_query(query)
+        if not file_key or not os.path.isabs(file_key):
+            self.send_error(400, "invalid file")
+            return
+        result = _core.handle_tab_open(file_key)
+        data = json.dumps(result or {}, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self._cors()
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _api_tab_close(self, query):
+        file_key = _core._file_key_from_query(query)
+        params = parse_qs(query or "")
+        gen_raw = (params.get("gen") or ["0"])[0]
+        try:
+            gen = int(gen_raw)
+        except (TypeError, ValueError):
+            gen = 0
+        if file_key:
+            _core.handle_tab_close(file_key, gen)
         self.send_response(204)
         self._cors()
         self.end_headers()
@@ -362,6 +403,14 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 self.wfile.write(
                     ("event: editorLine\ndata: %s\n\n" % initial_line).encode("utf-8")
                 )
+            from . import tab_manager
+            tabs_payload = json.dumps(
+                {"files": tab_manager.live_files(), "file": ""},
+                ensure_ascii=False,
+            )
+            self.wfile.write(
+                ("event: tabs\ndata: %s\n\n" % tabs_payload).encode("utf-8")
+            )
             self.wfile.flush()
             _core.touch_activity()
 

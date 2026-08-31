@@ -37,13 +37,7 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
             render_view(view, force=True, open_browser=False)
 
     def on_activated_async(self, view):
-        """ST->WEB: editor view switched - push switchTab so the matching
-        browser tab focuses itself via window.open('', windowName).
-
-        Cross-platform (no AppleScript). Direction guard: if this view
-        activation came from a WEB->ST doc switch (open_doc_from_browser
-        focusing the view), skip - echoing switchTab back would loop.
-        """
+        """ST->WEB: editor view switched - push switchTab if that file has a live tab."""
         from .mpe_core.preview_state import (
             is_preview_open, is_st_to_web_suppressed)
         if not is_preview_open():
@@ -57,12 +51,17 @@ class MarkdownPreviewEnhancedListener(sublime_plugin.EventListener):
             if not view.match_selector(0, _MARKDOWN_SCOPE):
                 return
             fn = view.file_name()
-            if fn and fn != _last_switch_tab:
-                _last_switch_tab = fn
+            if not fn or not tab_manager.is_alive(fn):
+                return
+            tab_manager.bind_view(view)
+            if fn != self._last_switch_tab:
+                self._last_switch_tab = fn
                 log.debug("ST->WEB switchTab push: %s" % fn)
                 set_active_doc(fn)
+                from .mpe_core.preview_url import focus_preview_tab
+                focus_preview_tab(fn)
         except Exception:
-            pass
+            log.error("on_activated_async switchTab failed")
 
     def on_modified_async(self, view):
         from .mpe_core.preview_state import is_preview_open

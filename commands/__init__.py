@@ -22,9 +22,12 @@ from ..mpe_core.render import (
 )
 from ..mpe_core.preview_state import (
     close_preview_ui,
+    ensure_server,
     is_preview_open,
 )
-from ..mpe_core.preview_server import has_active_sse_connection
+from ..mpe_core.preview_server import set_active_doc
+from ..mpe_core import tab_manager
+from ..mpe_core.preview_url import focus_preview_tab, open_preview_browser
 
 
 class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
@@ -35,12 +38,25 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
             self.window.status_message("MarkdownPreviewEnhanced: no active view")
             return
 
-        log.debug(
-            "toggle: open preview (sse=%s preview_open=%s)"
-            % (has_active_sse_connection(), is_preview_open())
-        )
+        fp = view.file_name()
+        if fp and tab_manager.is_alive(fp):
+            log.debug("toggle: reuse live tab %s" % fp)
+            set_active_doc(fp)
+            focus_preview_tab(fp)
+            render_view(view, force=True, open_browser=False)
+            self.window.status_message("MarkdownPreviewEnhanced: focusing preview")
+            return
+
+        log.debug("toggle: open preview file=%s preview_open=%s"
+                  % (fp, is_preview_open()))
         self.window.status_message("MarkdownPreviewEnhanced: opening preview…")
-        render_view(view, force=True, open_browser=True, focus_browser=True)
+        ensure_server()
+        if fp:
+            tab_manager.register(fp, view.id())
+            tab_manager.bind_view(view)
+        render_view(view, force=True, open_browser=False)
+        url = tab_manager.preview_url(fp)
+        open_preview_browser(url, True)
 
 
 class MarkdownPreviewEnhancedCloseCommand(sublime_plugin.WindowCommand):
@@ -54,7 +70,7 @@ class MarkdownPreviewEnhancedRefreshCommand(sublime_plugin.WindowCommand):
     def run(self):
         view = self.window.active_view()
         if view is not None:
-            render_view(view, force=True, open_browser=not is_preview_open())
+            render_view(view, force=True, open_browser=False)
 
 
 class MarkdownPreviewEnhancedExportHtmlCommand(sublime_plugin.WindowCommand):

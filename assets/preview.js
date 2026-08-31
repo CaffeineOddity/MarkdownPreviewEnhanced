@@ -37,6 +37,8 @@
   var lastContent = {};   // file -> last content payload (leader 补给晚到的 tab)
   var lastEditor = {};    // file -> last editorLine payload
   var openTabs = {};      // tabId -> {file, title}
+  var serverTabs = [];    // authoritative live files from SSE "tabs"
+  var tabGen = 0;         // generation from /api/tab_open
   var _latestFocusClaim = { id: null, t: 0 };  // newest focus-claim seen
   try {
     if (typeof BroadcastChannel === "function") {
@@ -154,19 +156,24 @@
       if (data && data.file && data.file !== channelFile) return;
       window.close();
     }
+    if (name === "close_old") {
+      if (data && data.file === channelFile && Number(data.gen) === tabGen) {
+        console.log(ts() + " [MDPP] close_old gen=" + tabGen);
+        window.close();
+      }
+      return;
+    }
+    if (name === "tabs") {
+      if (data && data.files && data.files.length >= 0) {
+        serverTabs = data.files;
+        renderTabList();
+      }
+      return;
+    }
     if (name === "switchTab") {
       console.log(ts() + " [MDPP] switchTab received file=" + (data && data.file) + " tabFile=" + channelFile);
-      if (!data || data.file === channelFile) {
-        try {
-          // ST->WEB sync: bring this tab to front. Loop prevention lives on
-          // the ST side (direction guard in open_doc_from_browser) - this
-          // tab may still get a manual hasFocus change which SHOULD notify.
-          var w = window.open("", windowNameFor(channelFile));
-          console.log(ts() + " [MDPP] switchTab window.open result=" + (w ? "ok" : "null"));
-          if (w) { try { w.focus(); } catch (err) {} }
-        } catch (err) {
-          console.log(ts() + " [MDPP] switchTab window.open error: " + err);
-        }
+      if (data && data.file === channelFile) {
+        try { window.focus(); } catch (err) {}
       }
       return;
     }
@@ -200,6 +207,20 @@
         var data = parseEventData(e.data);
         handleSseEvent("switchTab", data);
         bcSend({ type: "sse", event: "switchTab", data: data });
+      } catch (err) {}
+    });
+    stream.addEventListener("close_old", function (e) {
+      try {
+        var data = parseEventData(e.data);
+        handleSseEvent("close_old", data);
+        bcSend({ type: "sse", event: "close_old", data: data });
+      } catch (err) {}
+    });
+    stream.addEventListener("tabs", function (e) {
+      try {
+        var data = parseEventData(e.data);
+        handleSseEvent("tabs", data);
+        bcSend({ type: "sse", event: "tabs", data: data });
       } catch (err) {}
     });
     stream.addEventListener("ping", function () {
@@ -438,10 +459,18 @@
 
   function onVisibilityChange() {
     console.log(ts() + " [MDPP] visibilitychange hidden=" + document.hidden + " file=" + channelFile);
-    if (document.hidden) {
-      disconnectStream();
-    } else {
-      connectStream();
+    // Leader keeps /api/stream while hidden. Without BroadcastChannel we still
+    // drop SSE on hide so Chrome's 6-connection cap is not filled by background tabs.
+    if (!bc) {
+      if (document.hidden) {
+        disconnectStream();
+      } else {
+        connectStream();
+        notifyDocSwitch();
+      }
+      return;
+    }
+    if (!document.hidden) {
       notifyDocSwitch();
     }
   }
@@ -504,6 +533,34 @@
 
   function publishTabBye() {
     bcSend({ type: "tab-bye", id: tabId });
+    if (cfg.mode !== "server" || !channelFile || !tabGen) return;
+    var url = "/api/tab_close?file=" + encodeURIComponent(channelFile) + "&gen=" + tabGen;
+    try {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(url);
+        return;
+      }
+    } catch (err) {}
+    fetch(url, { method: "POST", cache: "no-store", keepalive: true }).catch(function () {});
+  }
+
+  function announceTab() {
+    if (cfg.mode !== "server" || !channelFile) {
+      return Promise.resolve();
+    }
+    return fetch("/api/tab_open?file=" + encodeURIComponent(channelFile), { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        tabGen = data && data.gen ? data.gen : 0;
+        if (data && data.files) {
+          serverTabs = data.files;
+          renderTabList();
+        }
+        console.log(ts() + " [MDPP] tab_open gen=" + tabGen);
+      })
+      .catch(function (err) {
+        console.log(ts() + " [MDPP] tab_open failed: " + err);
+      });
   }
 
   function rememberOpenTab(msg) {
@@ -515,9 +572,23 @@
     renderTabList();
   }
 
+  function fileIsAlive(file) {
+    if (!file) return false;
+    if (file === channelFile) return true;
+    if (serverTabs.indexOf(file) !== -1) return true;
+    var ids = Object.keys(openTabs);
+    for (var i = 0; i < ids.length; i++) {
+      if (openTabs[ids[i]] && openTabs[ids[i]].file === file) return true;
+    }
+    return false;
+  }
+
   function collectedTabs() {
     var byFile = {};
     byFile[channelFile || ""] = { file: channelFile, title: fileBasename(channelFile) };
+    serverTabs.forEach(function (f) {
+      if (!byFile[f]) byFile[f] = { file: f, title: fileBasename(f) };
+    });
     Object.keys(openTabs).forEach(function (id) {
       var it = openTabs[id];
       var key = it.file || "";
@@ -559,9 +630,9 @@
     if (!file || file === channelFile) return;
     var url = "/?file=" + encodeURIComponent(file);
     var name = windowNameFor(file);
-    // 必须在点击手势里 window.open:BC 的 window.focus() 会被 Chrome 丢掉,
-    // 空 url 的 open("", name) 找不到窗口时还会多出 about:blank。
-    // 目标 tab 已设 window.name 时复用并前置;没有则新开一张。
+    // User gesture: window.open(url, name) either reuses a named window or
+    // opens one in front. If a second tab is created, tab_open + close_old
+    // keeps 1:1. Empty-url open is not used (about:blank on OS-opened tabs).
     try {
       window.open(url, name);
     } catch (err) {
@@ -569,7 +640,9 @@
     }
     bcSend({ type: "focus-tab", file: file });
     if (cfg.mode === "server") {
-      fetch("/api/open_doc?file=" + encodeURIComponent(file), { cache: "no-store" }).catch(function () {});
+      var q = "/api/open_doc?file=" + encodeURIComponent(file);
+      if (fileIsAlive(file)) q += "&tab_switch=1";
+      fetch(q, { cache: "no-store" }).catch(function () {});
     }
   }
 
@@ -819,16 +892,18 @@
     });
 
     if (cfg.mode === "server") {
-      if (bc) {
-        bindBroadcast();
-        fetchSnapshot();
-        bcSend({ type: "need-snapshot", file: channelFile, id: tabId });
-        startElection();
-      } else {
-        bindVisibility();
-        fetchSnapshot();
-        connectStream();
-      }
+      announceTab().then(function () {
+        if (bc) {
+          bindBroadcast();
+          fetchSnapshot();
+          bcSend({ type: "need-snapshot", file: channelFile, id: tabId });
+          startElection();
+        } else {
+          bindVisibility();
+          fetchSnapshot();
+          connectStream();
+        }
+      });
     }
   };
 })();

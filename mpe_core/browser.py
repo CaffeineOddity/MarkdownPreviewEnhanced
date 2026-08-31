@@ -1,9 +1,8 @@
-"""Cross-platform browser open / close for MarkdownPreviewEnhanced.
+"""Cross-platform browser open / close / focus for MarkdownPreviewEnhanced.
 
-No AppleScript: macOS uses ``open -a``, Windows spawns the browser exe,
-Linux uses xdg-open.  Focus/tab-switching between ST and the browser is
-done in the browser itself (window.open('', name) via SSE switchTab),
-not by driving the browser from the OS.
+Opening a new preview still uses ``open -a`` / the browser exe (no duplicate
+logic there).  Focusing an *existing* tab on macOS uses AppleScript to set
+the active tab by URL — Chrome ignores ``window.focus()`` on OS-opened tabs.
 """
 import os
 import subprocess
@@ -86,6 +85,51 @@ def _url_hint(url):
     return url
 
 
+def _preview_match_hints(url):
+    """Same doc may appear as ?file=%2Fabs%2Fa.md or ?file=/abs/a.md."""
+    from urllib.parse import parse_qs, quote, urlparse
+
+    hints = []
+    raw = _url_hint(url)
+    if raw:
+        hints.append(raw)
+    parsed = urlparse(url or "")
+    host = parsed.netloc
+    vals = parse_qs(parsed.query).get("file") or []
+    path = vals[0] if vals else ""
+    if host and path:
+        encoded = "%s/?file=%s" % (host, quote(path, safe=""))
+        decoded = "%s/?file=%s" % (host, path)
+        for item in (encoded, decoded):
+            if item not in hints:
+                hints.append(item)
+    return hints
+
+
+def _as_escape(text):
+    return (text or "").replace("\\", "\\\\").replace('"', "")
+
+
+def _as_url_matches(hints):
+    parts = []
+    for hint in hints:
+        escaped = _as_escape(hint)
+        if escaped:
+            parts.append('(u contains "%s")' % escaped)
+    if not parts:
+        return "false"
+    return "(" + " or ".join(parts) + ")"
+
+
+# display name -> AppleScript process name (Chromium-family + Safari)
+_MAC_AS_NAMES = {
+    "Google Chrome": "Google Chrome",
+    "Safari": "Safari",
+    "Microsoft Edge": "Microsoft Edge",
+    "Brave Browser": "Brave Browser",
+}
+
+
 class BrowserSession:
     """Tracks the last opened browser so we can close it."""
 
@@ -113,6 +157,22 @@ class BrowserSession:
         if self.system == "Windows":
             return self._open_win(url, preferred, log)
         return self._open_linux(url, preferred, log)
+
+    def focus_existing_tab(self, url, log=None):
+        """Focus an already-open preview tab. Never opens a new one.
+
+        macOS: AppleScript walks Chrome/Safari/Edge/Brave tabs by URL.
+        Other OS: not supported (returns False); caller must not OS-open.
+        """
+        log = log or (lambda m: None)
+        if not url:
+            log("focus existing: no url")
+            return False
+        self.last_url = url
+        if self.system != "Darwin":
+            log("focus existing: no tab script on %s" % self.system)
+            return False
+        return self._focus_mac(url, log)
 
     def close(self, preview_file_hint=None, log=None):
         """Best-effort close of the spawned browser process (if any).
@@ -169,6 +229,129 @@ class BrowserSession:
             except Exception:
                 continue
         return None
+
+    def _run_osascript(self, script, log, label, expect_found=False):
+        try:
+            r = subprocess.run(
+                ["osascript", "-e", script],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                universal_newlines=True, timeout=8)
+            if r.returncode != 0:
+                err = (r.stderr or r.stdout or "").strip()
+                log("%s AppleScript failed (%s): %s" % (label, r.returncode, err[:300]))
+                return False
+            out = (r.stdout or "").strip().lower()
+            if expect_found and "found" not in out:
+                log("%s existing tab not found" % label)
+                return False
+            return True
+        except Exception as e:
+            log("%s AppleScript error: %s" % (label, e))
+            return False
+
+    def _chrome_focus_or_open_script(self, app, url, hints, open_if_missing):
+        match = _as_url_matches(hints)
+        open_block = ""
+        if open_if_missing:
+            open_block = (
+                "  if not found then\n"
+                "    if (count of windows) = 0 then\n"
+                "      make new window\n"
+                "      set URL of active tab of front window to targetURL\n"
+                "    else\n"
+                "      tell front window to make new tab with properties {URL:targetURL}\n"
+                "    end if\n"
+                "  end if\n"
+            )
+        return (
+            'tell application "%s"\n' % app +
+            '  set targetURL to "%s"\n' % url +
+            "  set found to false\n"
+            "  if (count of windows) > 0 then\n"
+            "    repeat with w in windows\n"
+            "      set tabIndex to 0\n"
+            "      repeat with t in tabs of w\n"
+            "        set tabIndex to tabIndex + 1\n"
+            "        try\n"
+            "          set u to URL of t\n"
+            "          if %s then\n" % match +
+            "            set active tab index of w to tabIndex\n"
+            "            set index of w to 1\n"
+            "            set found to true\n"
+            "            exit repeat\n"
+            "          end if\n"
+            "        end try\n"
+            "      end repeat\n"
+            "      if found then exit repeat\n"
+            "    end repeat\n"
+            "  end if\n"
+            + open_block +
+            ("  activate\n" if open_if_missing else
+             "  if found then activate\n"
+             "  if found then\n    return \"found\"\n  else\n    return \"miss\"\n  end if\n") +
+            "end tell"
+        )
+
+    def _safari_focus_or_open_script(self, url, hints, open_if_missing):
+        match = _as_url_matches(hints)
+        open_block = ""
+        if open_if_missing:
+            open_block = (
+                "  if not found then\n"
+                "    open location targetURL\n"
+                "  end if\n"
+            )
+        return (
+            'tell application "Safari"\n'
+            '  set targetURL to "%s"\n' % url +
+            "  set found to false\n"
+            "  if (count of windows) > 0 then\n"
+            "    repeat with w in windows\n"
+            "      repeat with t in tabs of w\n"
+            "        try\n"
+            "          set u to URL of t\n"
+            "          if %s then\n" % match +
+            "            set current tab of w to t\n"
+            "            set index of w to 1\n"
+            "            set found to true\n"
+            "            exit repeat\n"
+            "          end if\n"
+            "        end try\n"
+            "      end repeat\n"
+            "      if found then exit repeat\n"
+            "    end repeat\n"
+            "  end if\n"
+            + open_block +
+            ("  activate\n" if open_if_missing else
+             "  if found then activate\n"
+             "  if found then\n    return \"found\"\n  else\n    return \"miss\"\n  end if\n") +
+            "end tell"
+        )
+
+    def _focus_mac(self, url, log):
+        app = self.app_name or self._detect_mac_app("auto")
+        as_name = _MAC_AS_NAMES.get(app)
+        if not as_name and app:
+            for display, script_name in _MAC_AS_NAMES.items():
+                if _matches_preferred(app, display):
+                    as_name = script_name
+                    app = display
+                    break
+        if not as_name:
+            log("focus existing: no AppleScript app for %s" % app)
+            return False
+        hints = _preview_match_hints(url)
+        url_safe = (url or "").replace('"', "%22")
+        if as_name == "Safari":
+            script = self._safari_focus_or_open_script(url_safe, hints, False)
+        else:
+            script = self._chrome_focus_or_open_script(
+                as_name, url_safe, hints, False)
+        ok = self._run_osascript(script, log, as_name, expect_found=True)
+        if ok:
+            log("%s focused existing tab: %s" % (as_name, url))
+            self.app_name = app
+        return ok
 
     # ── default / Windows / Linux ───────────────────────────────────────────
 
