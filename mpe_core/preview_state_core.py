@@ -31,7 +31,8 @@ def get_log():
 # ── SSE JSON wrapper ─────────────────────────────────────────────────────────
 
 def _json_with_file(payload_json, file_key):
-    """给 SSE JSON 补上 file,让全局流上的各 tab 能按文档过滤。"""
+    """给 SSE JSON 补上 file 和 from,让全局流上的各 tab 能按文档过滤,
+    并标记来源方向为 ST。"""
     try:
         obj = json.loads(payload_json) if payload_json else {}
     except Exception:
@@ -39,6 +40,7 @@ def _json_with_file(payload_json, file_key):
     if not isinstance(obj, dict):
         obj = {"data": obj}
     obj["file"] = file_key or ""
+    obj["from"] = "ST"
     return json.dumps(obj, ensure_ascii=False)
 
 

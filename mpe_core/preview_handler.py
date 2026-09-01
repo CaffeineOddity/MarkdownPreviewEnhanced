@@ -143,11 +143,18 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 data = {}
             line = int(data.get("line") or 0)
             file_key = data.get("file") or ""
-            with _core._STATE.lock:
-                ch = _core._STATE.channel(file_key)
-                if line > 0:
-                    ch.browser_line = line
-                    ch.browser_line_seq += 1
+            from_tag = data.get("from") or ""
+            # 只接受浏览器主动滚动上报（from:"BS"），拦截 ST→browser 回环
+            if from_tag != "BS":
+                _core.get_log()("WEB->ST browser_scroll REJECTED from=%s line=%d file=%s"
+                                % (from_tag, line, file_key))
+            else:
+                _core.get_log()("WEB->ST browser_scroll line=%d file=%s" % (line, file_key))
+                with _core._STATE.lock:
+                    ch = _core._STATE.channel(file_key)
+                    if line > 0:
+                        ch.browser_line = line
+                        ch.browser_line_seq += 1
             self.send_response(200)
             self._cors()
             self.send_header("Content-Type", "application/json")

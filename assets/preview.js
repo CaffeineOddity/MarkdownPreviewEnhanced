@@ -148,7 +148,7 @@
       if (!eventMatchesTab(data)) return;
       if (data.line && data.line !== lastEditorLine) {
         lastEditorLine = data.line;
-        scrollToLine(data.line);
+        scrollToLine(data.line, data.from || "BS");
       }
       return;
     }
@@ -827,19 +827,12 @@
     return best;
   }
 
-  function reportBrowserScroll() {
-    if (cfg.mode !== "server" || !cfg.scrollSync) return;
-    var line = findNearestLine();
-    if (!line || line === lastReportedLine) return;
-    lastReportedLine = line;
-    fetch("/api/browser_scroll", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ line: line, file: channelFile }),
-    }).catch(function () {});
-  }
+  // 来源方向：scrollToLine 收到 from:"ST" 时置 "ST"，
+  // 用户 wheel/touch 滚动时置回 "BS"。onScroll 只读不改。
+  var _scrollFrom = "BS";
 
-  function scrollToLine(line) {
+  function scrollToLine(line, from) {
+    if (from === "ST") _scrollFrom = "ST";
     if (!line) return;
     var nodes = document.querySelectorAll("[data-line]");
     var target = null;
@@ -856,13 +849,34 @@
     }
   }
 
+  // 用户手动滚动（wheel/touch/drag）：恢复来源为 BS
+  function onUserScroll() {
+    _scrollFrom = "BS";
+  }
+
   function onScroll() {
     saveScroll();
     updateTocActive();
-    if (cfg.scrollSync) {
-      if (onScroll._t) clearTimeout(onScroll._t);
-      onScroll._t = setTimeout(reportBrowserScroll, 150);
-    }
+    if (!cfg.scrollSync) return;
+    // ST 触发的滚动：不上报
+    if (_scrollFrom === "ST") return;
+    // 用户手动滚动：上报
+    if (onScroll._t) clearTimeout(onScroll._t);
+    onScroll._t = setTimeout(reportBrowserScroll, 150);
+  }
+
+  function reportBrowserScroll() {
+    if (cfg.mode !== "server" || !cfg.scrollSync) return;
+    var line = findNearestLine();
+    if (!line || line === lastReportedLine) return;
+    lastReportedLine = line;
+    console.log(ts() + " [MDPP] browser_scroll -> ST line=" + line
+                + " file=" + channelFile + " from=" + _scrollFrom);
+    fetch("/api/browser_scroll", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ line: line, file: channelFile, from: _scrollFrom }),
+    }).catch(function () {});
   }
 
   // ── export buttons ───────────────────────────────────────────────────
@@ -972,6 +986,8 @@
     bindTocClicks();
     updateTocActive();
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("wheel", onUserScroll, { passive: true });
+    window.addEventListener("touchmove", onUserScroll, { passive: true });
     window.addEventListener("beforeunload", saveScroll);
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") window.mdppCloseSponsor();
