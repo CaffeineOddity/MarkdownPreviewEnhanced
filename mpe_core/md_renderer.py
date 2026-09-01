@@ -246,6 +246,131 @@ def _inject_heading_lines(html, heading_lines):
     return re.sub(r"<(h[1-6])(\b[^>]*>)", repl, html, flags=re.IGNORECASE)
 
 
+# ── 块级元素 data-line 注入 ──────────────────────────────────────────────────
+
+# 源码块级结构识别正则
+_LIST_ITEM_RE = re.compile(r"^([-*+]|[0-9]+\.)\s+")
+_TABLE_ROW_RE = re.compile(r"^\|.*\|\s*$")
+_TABLE_SEP_RE = re.compile(r"^[\s|:-]+$")
+_HR_RE = re.compile(r"^(-{3,}|\*{3,}|_{3,})\s*$")
+
+
+def _collect_block_lines(text):
+    """逐行扫描源码，返回 [(line_no 1-based, tag)] 块级元素列表。
+
+    heading 已由 _collect_heading_lines 处理，这里跳过。
+    tag 取值: p, li, blockquote, pre, table, tr
+    不标 ul/ol（容器）；blockquote 只标自身不标内部 p；
+    table 标首个 | 行（表头），tr 标每个数据行。
+    """
+    out = []
+    in_fence = False
+    in_table = False
+    in_list = False
+    for i, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        # fenced code
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            if not in_fence:
+                in_fence = True
+                out.append((i, "pre"))
+            else:
+                in_fence = False
+            in_list = False
+            in_table = False
+            continue
+        if in_fence:
+            continue
+        # heading: 跳过，heading_lines 已处理
+        if _ATX_HEADING_RE.match(stripped):
+            in_list = False
+            in_table = False
+            continue
+        # table row
+        if _TABLE_ROW_RE.match(stripped):
+            if not in_table:
+                out.append((i, "table"))
+                in_table = True
+            elif not _TABLE_SEP_RE.match(stripped):
+                out.append((i, "tr"))
+            in_list = False
+            continue
+        else:
+            in_table = False
+        # list item
+        if _LIST_ITEM_RE.match(stripped):
+            in_list = True
+            out.append((i, "li"))
+            continue
+        else:
+            in_list = False
+        # blockquote
+        if stripped.startswith(">"):
+            out.append((i, "blockquote"))
+            continue
+        # horizontal rule (渲染为 <hr>,不标 data-line)
+        if _HR_RE.match(stripped):
+            continue
+        # paragraph
+        if stripped:
+            out.append((i, "p"))
+    return out
+
+
+def _inject_block_lines(html, block_lines, line_offset):
+    """按顺序给 HTML 块级元素注入 data-line。
+
+    跳过容器标签 ul/ol/tbody/thead；跳过 blockquote 内的 <p>；
+    跳过 thead 内的 <tr>。heading 已由 _inject_heading_lines 处理。
+    """
+    if not block_lines:
+        return html
+    idx = [0]
+    in_blockquote = [False]
+    in_thead = [False]
+
+    def repl(m):
+        full = m.group(0)
+        slash = m.group(1)
+        tag = m.group(2).lower()
+        rest = m.group(3)
+        # 闭合标签
+        if slash == "/":
+            if tag == "thead":
+                in_thead[0] = False
+            elif tag == "blockquote":
+                in_blockquote[0] = False
+            return full
+        # 开标签
+        if tag == "thead":
+            in_thead[0] = True
+            return full
+        # 跳过容器
+        if tag in ("ul", "ol", "tbody"):
+            return full
+        # blockquote: 标自身，跳过内部 p
+        if tag == "blockquote":
+            in_blockquote[0] = True
+        if tag == "p" and in_blockquote[0]:
+            return full
+        if tag == "tr" and in_thead[0]:
+            return full
+        if idx[0] >= len(block_lines):
+            return full
+        ln, expected = block_lines[idx[0]]
+        if tag != expected:
+            return full
+        idx[0] += 1
+        actual_line = ln + line_offset
+        return "<%s data-line=\"%d\"%s" % (m.group(2), actual_line, rest)
+
+    pattern = re.compile(
+        r"<(/?)(p|li|blockquote|thead|tbody|tr|pre|table)(\b[^>]*>)",
+        re.IGNORECASE,
+    )
+    return pattern.sub(repl, html)
+
+
 def _apply_task_lists(html):
     html = _TASK_OPEN_RE.sub(
         r'\1\2<input type="checkbox" class="task-list-item-checkbox" disabled> ',
@@ -640,6 +765,8 @@ def render(
         html = _apply_task_lists(html)
 
     html = _inject_heading_lines(html, heading_lines)
+    block_lines = _collect_block_lines(text)
+    html = _inject_block_lines(html, block_lines, line_offset)
     html = rewrite_image_srcs(html, base_dir, mode=image_mode)
     html = rewrite_link_hrefs(html, base_dir, mode=image_mode)
 

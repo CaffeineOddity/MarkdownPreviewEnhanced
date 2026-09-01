@@ -32,6 +32,7 @@ STOP_GRACE = 2.0             # wait after last tab_close before stop (F5)
 CRASH_IDLE = 60.0            # live tabs but no SSE: assume crash
 
 _scroll_timer = None
+_last_browser_seqs = {}      # 频道 -> 已处理的 browser_line 序号
 
 # Re-export tab_manager state for backward compatibility (MarkdownPreviewEnhanced.py
 # imports _bound_view_id and _pending_link_opens from here).
@@ -197,6 +198,34 @@ def open_doc_from_browser(path, focus_browser=True):
     sublime.active_window().open_file(path)
 
 
+# ── browser → ST scroll ──────────────────────────────────────────────────────
+
+_MARKDOWN_SCOPE = "text.html.markdown"
+
+
+def _scroll_editor_to_line(line, view_id):
+    """Scroll the bound markdown view to 1-based line."""
+    view = None
+    for w in sublime.windows():
+        for v in w.views():
+            if view_id and v.id() == view_id:
+                view = v
+                break
+            if view is None and v.match_selector(0, _MARKDOWN_SCOPE):
+                view = v
+        if view and view_id and view.id() == view_id:
+            break
+    if view is None:
+        return
+    try:
+        pt = view.text_point(max(0, line - 1), 0)
+        view.sel().clear()
+        view.sel().add(sublime.Region(pt))
+        view.show_at_center(pt)
+    except Exception as e:
+        log.debug("scroll editor failed: %s" % e)
+
+
 # ── background poller ───────────────────────────────────────────────────────
 
 def start_scroll_poller():
@@ -253,7 +282,16 @@ def start_scroll_poller():
                 log.error("preview tick lifecycle failed: %s" % e)
 
         try:
-            pop_browser_lines()
+            if config.get("scroll_sync", True):
+                for channel_key, line, seq in pop_browser_lines():
+                    if seq > _last_browser_seqs.get(channel_key, 0) and line > 0:
+                        _last_browser_seqs[channel_key] = seq
+                        view_id = tab_manager.get_view_id_for_file(channel_key)
+                        sublime.set_timeout(
+                            lambda l=line, v=view_id: _scroll_editor_to_line(l, v), 0
+                        )
+            else:
+                pop_browser_lines()
         except Exception:
             pass
 
