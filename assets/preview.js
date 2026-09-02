@@ -149,6 +149,9 @@
       if (data.line && data.line !== lastEditorLine) {
         lastEditorLine = data.line;
         scrollToLine(data.line, data.from || "BS");
+      } else {
+        console.log(ts() + " [MDPP] editorLine skipped line=" + data.line
+                    + " lastEditorLine=" + lastEditorLine);
       }
       return;
     }
@@ -845,7 +848,22 @@
       if (l === line) { target = el; break; }
     }
     if (target) {
-      target.scrollIntoView({ block: "start", behavior: "smooth" });
+      var rect = target.getBoundingClientRect();
+      var y = rect.top + (window.scrollY || document.documentElement.scrollTop);
+      console.log(ts() + " [MDPP] scrollToLine line=" + line
+                  + " target=" + target.tagName + ":" + target.getAttribute("data-line")
+                  + " y=" + y + " scrollY=" + window.scrollY);
+      window.scrollTo(0, y);
+      // 100ms 后检查是否真的滚到位
+      setTimeout(function() {
+        console.log(ts() + " [MDPP] scrollToLine after 100ms scrollY=" + window.scrollY
+                    + " expected=" + y);
+      }, 100);
+      // 500ms 再检查一次（排除 smooth/anchoring 延迟）
+      setTimeout(function() {
+        console.log(ts() + " [MDPP] scrollToLine after 500ms scrollY=" + window.scrollY
+                    + " expected=" + y);
+      }, 500);
     }
   }
 

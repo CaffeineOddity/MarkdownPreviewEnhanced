@@ -253,6 +253,7 @@ _LIST_ITEM_RE = re.compile(r"^([-*+]|[0-9]+\.)\s+")
 _TABLE_ROW_RE = re.compile(r"^\|.*\|\s*$")
 _TABLE_SEP_RE = re.compile(r"^[\s|:-]+$")
 _HR_RE = re.compile(r"^(-{3,}|\*{3,}|_{3,})\s*$")
+_FENCE_LANG_RE = re.compile(r"^(`{3,}|~{3,})(\w+)", re.IGNORECASE)
 
 
 def _collect_block_lines(text):
@@ -262,58 +263,91 @@ def _collect_block_lines(text):
     tag 取值: p, li, blockquote, pre, table, tr
     不标 ul/ol（容器）；blockquote 只标自身不标内部 p；
     table 标首个 | 行（表头），tr 标每个数据行。
+    mermaid/echarts fence 渲染后不是 <pre>，跳过。
+    \$\$...\$\$ 数学块渲染后是 <div>，跳过。
+    连续非空行 markdown 合并为一个 <p>，只标首行；
+    连续 > 行合并为一个 <blockquote>，只标首行。
     """
     out = []
     in_fence = False
     in_table = False
-    in_list = False
+    in_paragraph = False
+    in_blockquote = False
+    in_math = False
     for i, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
+        # 数学块 \$\$...\$\$
+        if stripped == "\$\$" or stripped.startswith("\$\$"):
+            if not in_math:
+                in_math = True
+            else:
+                in_math = False
+            in_paragraph = False
+            in_blockquote = False
+            continue
+        if in_math:
+            continue
         # fenced code
         if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_paragraph = False
+            in_blockquote = False
             if not in_fence:
                 in_fence = True
-                out.append((i, "pre"))
+                # mermaid/echarts fence 渲染后不是 <pre>，跳过
+                m = _FENCE_LANG_RE.match(stripped)
+                lang = m.group(2).lower() if m else ""
+                if lang not in ("mermaid", "echarts"):
+                    out.append((i, "pre"))
             else:
                 in_fence = False
-            in_list = False
             in_table = False
             continue
         if in_fence:
             continue
         # heading: 跳过，heading_lines 已处理
         if _ATX_HEADING_RE.match(stripped):
-            in_list = False
+            in_paragraph = False
+            in_blockquote = False
             in_table = False
             continue
         # table row
         if _TABLE_ROW_RE.match(stripped):
+            in_paragraph = False
+            in_blockquote = False
             if not in_table:
                 out.append((i, "table"))
                 in_table = True
             elif not _TABLE_SEP_RE.match(stripped):
                 out.append((i, "tr"))
-            in_list = False
             continue
         else:
             in_table = False
         # list item
         if _LIST_ITEM_RE.match(stripped):
-            in_list = True
+            in_paragraph = False
+            in_blockquote = False
             out.append((i, "li"))
             continue
-        else:
-            in_list = False
-        # blockquote
+        # blockquote: 连续 > 行合并为一个 <blockquote>，只标首行
         if stripped.startswith(">"):
-            out.append((i, "blockquote"))
+            in_paragraph = False
+            if not in_blockquote:
+                out.append((i, "blockquote"))
+                in_blockquote = True
             continue
+        else:
+            in_blockquote = False
         # horizontal rule (渲染为 <hr>,不标 data-line)
         if _HR_RE.match(stripped):
+            in_paragraph = False
             continue
-        # paragraph
+        # paragraph: 连续非空行合并为一个 <p>，只标首行
         if stripped:
-            out.append((i, "p"))
+            if not in_paragraph:
+                out.append((i, "p"))
+                in_paragraph = True
+        else:
+            in_paragraph = False
     return out
 
 
@@ -667,6 +701,9 @@ def render(
             for ln, level, title in heading_lines
         ]
 
+    # 在 stash 之前收集块级行号，此时 text 行号与源码一致
+    block_lines = _collect_block_lines(text)
+
     # ECharts extraction
     echarts_html_parts = {}
 
@@ -765,8 +802,6 @@ def render(
         html = _apply_task_lists(html)
 
     html = _inject_heading_lines(html, heading_lines)
-    block_lines = _collect_block_lines(text)
-    html = _inject_block_lines(html, block_lines, line_offset)
     html = rewrite_image_srcs(html, base_dir, mode=image_mode)
     html = rewrite_link_hrefs(html, base_dir, mode=image_mode)
 

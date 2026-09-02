@@ -218,6 +218,7 @@ def set_editor_line(line, file_path=None):
         ch = _STATE.channel(file_path)
         ch.editor_line = int(line or 0)
         payload = json.dumps({"line": ch.editor_line}, ensure_ascii=False)
+    _LOG("ST->WEB set_editor_line line=%d file=%s" % (ch.editor_line, file_path))
     ch._notify_sse("editorLine", payload)
 
 
