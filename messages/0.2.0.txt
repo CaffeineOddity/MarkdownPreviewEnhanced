@@ -1,0 +1,9 @@
+MarkdownPreviewEnhanced 0.2.0
+=============================
+
+- feat: preview dark mode (toolbar toggle, follows system by default, persisted)
+- feat: PNG export and print stay readable in dark mode (force a light canvas)
+- fix: ST click syncs the matching preview line to the middle of the browser
+- fix: mermaid/fenced blocks map a line range so clicks inside a diagram land on that slice
+- fix: detect Chrome/Safari/Edge on macOS even when Spotlight (mdfind) is sandboxed
+- fix: if focusing an existing preview tab fails, open a new one instead of doing nothing
