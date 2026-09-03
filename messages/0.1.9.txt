@@ -1,0 +1,8 @@
+MarkdownPreviewEnhanced 0.1.9
+=============================
+
+- fix: keep only super+shift+m default keybinding (issue #6)
+- fix(scroll-sync): use window.scrollTo, add debug logging, skip mermaid/echarts/math in block scan
+- feat(scroll-sync): inject data-line on all block elements, restore bidirectional scroll
+- fix(scroll-sync): tag scroll direction to break ST↔browser feedback loop
+- chore: restore debug logging on master
