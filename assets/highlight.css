@@ -65,3 +65,73 @@
 .codehilite .vg { color: #005cc5 }
 .codehilite .vi { color: #005cc5 }
 .codehilite .vm { color: #005cc5 }
+
+/* ── dark theme (issue #5): GitHub-dark token colors ─────────────────── */
+html[data-mdpp-theme="dark"] .codehilite { background: #161b22; }
+html[data-mdpp-theme="dark"] .codehilite .hll { background-color: #6272a4 }
+html[data-mdpp-theme="dark"] .codehilite .c { color: #8b949e } /* Comment */
+html[data-mdpp-theme="dark"] .codehilite .err { color: #f85149 } /* Error */
+html[data-mdpp-theme="dark"] .codehilite .k { color: #ff7b72 } /* Keyword */
+html[data-mdpp-theme="dark"] .codehilite .o { color: #ff7b72 } /* Operator */
+html[data-mdpp-theme="dark"] .codehilite .ch { color: #8b949e }
+html[data-mdpp-theme="dark"] .codehilite .cm { color: #8b949e }
+html[data-mdpp-theme="dark"] .codehilite .cp { color: #ff7b72 }
+html[data-mdpp-theme="dark"] .codehilite .cpf { color: #8b949e }
+html[data-mdpp-theme="dark"] .codehilite .c1 { color: #8b949e }
+html[data-mdpp-theme="dark"] .codehilite .cs { color: #8b949e }
+html[data-mdpp-theme="dark"] .codehilite .gd { color: #ffa198; background-color: rgba(248, 81, 73, 0.15) }
+html[data-mdpp-theme="dark"] .codehilite .ge { font-style: italic }
+html[data-mdpp-theme="dark"] .codehilite .gh { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .gi { color: #7ee787; background-color: rgba(63, 185, 80, 0.15) }
+html[data-mdpp-theme="dark"] .codehilite .gp { color: #8b949e }
+html[data-mdpp-theme="dark"] .codehilite .gs { font-weight: bold }
+html[data-mdpp-theme="dark"] .codehilite .gu { color: #d2a8ff }
+html[data-mdpp-theme="dark"] .codehilite .kc { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .kd { color: #ff7b72 }
+html[data-mdpp-theme="dark"] .codehilite .kn { color: #ff7b72 }
+html[data-mdpp-theme="dark"] .codehilite .kp { color: #ff7b72 }
+html[data-mdpp-theme="dark"] .codehilite .kr { color: #ff7b72 }
+html[data-mdpp-theme="dark"] .codehilite .kt { color: #ff7b72 }
+html[data-mdpp-theme="dark"] .codehilite .m { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .s { color: #a5d6ff }
+html[data-mdpp-theme="dark"] .codehilite .na { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .nb { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .nc { color: #f0883e }
+html[data-mdpp-theme="dark"] .codehilite .no { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .nd { color: #d2a8ff }
+html[data-mdpp-theme="dark"] .codehilite .ni { color: #ffa657 }
+html[data-mdpp-theme="dark"] .codehilite .ne { color: #f0883e }
+html[data-mdpp-theme="dark"] .codehilite .nf { color: #d2a8ff }
+html[data-mdpp-theme="dark"] .codehilite .nl { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .nn { color: #ff7b72 }
+html[data-mdpp-theme="dark"] .codehilite .nt { color: #7ee787 }
+html[data-mdpp-theme="dark"] .codehilite .nv { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .ow { color: #ff7b72 }
+html[data-mdpp-theme="dark"] .codehilite .w { color: #8b949e }
+html[data-mdpp-theme="dark"] .codehilite .mb { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .mf { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .mh { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .mi { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .mo { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .sa { color: #a5d6ff }
+html[data-mdpp-theme="dark"] .codehilite .sb { color: #a5d6ff }
+html[data-mdpp-theme="dark"] .codehilite .sc { color: #a5d6ff }
+html[data-mdpp-theme="dark"] .codehilite .dl { color: #a5d6ff }
+html[data-mdpp-theme="dark"] .codehilite .sd { color: #a5d6ff }
+html[data-mdpp-theme="dark"] .codehilite .s2 { color: #a5d6ff }
+html[data-mdpp-theme="dark"] .codehilite .se { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .sh { color: #a5d6ff }
+html[data-mdpp-theme="dark"] .codehilite .si { color: #a5d6ff }
+html[data-mdpp-theme="dark"] .codehilite .sx { color: #a5d6ff }
+html[data-mdpp-theme="dark"] .codehilite .sr { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .s1 { color: #a5d6ff }
+html[data-mdpp-theme="dark"] .codehilite .ss { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .bp { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .fm { color: #d2a8ff }
+html[data-mdpp-theme="dark"] .codehilite .vc { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .vg { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .vi { color: #79c0ff }
+html[data-mdpp-theme="dark"] .codehilite .vm { color: #79c0ff }
+
+/* KaTeX 在暗黑下保持前景色 */
+html[data-mdpp-theme="dark"] .katex { color: var(--mdpp-fg); }

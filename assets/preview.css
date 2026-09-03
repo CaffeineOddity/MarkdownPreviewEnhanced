@@ -22,6 +22,42 @@
     "Liberation Mono", monospace;
 }
 
+/* ── dark theme (issue #5) ────────────────────────────────────────────── */
+/* html[data-mdpp-theme="dark"] 由 preview.js 控制（localStorage 持久化,
+   默认跟随 prefers-color-scheme）。只换变量,不改任何组件样式。 */
+html[data-mdpp-theme="dark"] {
+  --mdpp-bg: #0d1117;
+  --mdpp-fg: #e6edf3;
+  --mdpp-muted: #8b949e;
+  --mdpp-border: #30363d;
+  --mdpp-border-muted: #21262d;
+  --mdpp-surface: #161b22;
+  --mdpp-surface-2: #21262d;
+  --mdpp-link: #58a6ff;
+  --mdpp-link-hover: #79c0ff;
+  --mdpp-code-bg: rgba(110, 118, 129, 0.4);
+  --mdpp-pre-bg: #161b22;
+  --mdpp-quote-border: #30363d;
+  --mdpp-accent: #58a6ff;
+  --mdpp-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+html[data-mdpp-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* 滚动条随主题 */
+html[data-mdpp-theme="dark"] {
+  scrollbar-color: #30363d #0d1117;
+}
+
+/* scrollspy/tabs 高亮在暗黑下用更亮的底 */
+html[data-mdpp-theme="dark"] .mdpp-toc .toc a.mdpp-toc-active,
+html[data-mdpp-theme="dark"] .mdpp-tabs-active a {
+  color: #f0f6fc !important;
+  background: rgba(88, 166, 255, 0.18);
+}
+
 *,
 *::before,
 *::after {
@@ -30,7 +66,6 @@
 
 html {
   background: var(--mdpp-bg);
-  scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -540,6 +575,17 @@ body {
     color: #000 !important;
     font-size: 13pt !important;
     line-height: 1.6 !important;
+  }
+
+  /* 打印强制白底:覆盖暗黑主题变量与代码高亮 (issue #5) */
+  html[data-mdpp-theme="dark"],
+  html[data-mdpp-theme="dark"] body {
+    --mdpp-bg: #fff;
+    --mdpp-fg: #000;
+    --mdpp-surface: #f5f5f5;
+    --mdpp-pre-bg: #f5f5f5;
+    background: #fff !important;
+    color: #000 !important;
   }
 
   .mdpp-toolbar,
