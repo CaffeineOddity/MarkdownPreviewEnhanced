@@ -211,7 +211,11 @@ class BrowserSession:
         return self._open_default(url, log)
 
     def _detect_mac_app(self, preferred):
-        """Find an installed browser app that matches *preferred*."""
+        """Find an installed browser app that matches *preferred*.
+
+        Spotlight (mdfind) is the primary probe; on ST's plugin host it
+        may fail (privacy/sandbox), so we also check /Applications.
+        """
         if preferred not in ("auto", "default", ""):
             # Preferred name may not match bundle ids; check app display names first.
             for bid, name in _MAC_BROWSER_APPS:
@@ -228,6 +232,11 @@ class BrowserSession:
                     return name
             except Exception:
                 continue
+        # mdfind failed (ST plugin host sandbox) - check /Applications.
+        for bid, name in _MAC_BROWSER_APPS:
+            for base in ("/Applications", os.path.expanduser("~/Applications")):
+                if os.path.isdir(os.path.join(base, name + ".app")):
+                    return name
         return None
 
     def _run_osascript(self, script, log, label, expect_found=False):

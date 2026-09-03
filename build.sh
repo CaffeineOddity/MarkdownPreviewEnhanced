@@ -403,6 +403,34 @@ install_zip() {
     fi
     cp "$ZIP_PATH" "$ST_INSTALLED"
     echo "  installed → ${ST_INSTALLED}"
+
+    # Prevent Package Control from auto-overwriting the dev zip with the
+    # channel release. Remove this package from PC installed_packages list
+    # so PC never tries to "install" it on next startup.
+    local pc_settings="${ST_SUPPORT}/Packages/User/Package Control.sublime-settings"
+    if [ -f "$pc_settings" ]; then
+        if grep -q "\"${PKG_NAME}\"" "$pc_settings" 2>/dev/null; then
+            "${PYTHON:-python3}" - "$pc_settings" "$PKG_NAME" <<'PYEOF'
+import json, sys
+path, pkg = sys.argv[1], sys.argv[2]
+with open(path, "r", encoding="utf-8") as f:
+    data = json.loads(f.read())
+lst = data.get("installed_packages", [])
+if pkg not in lst:
+    print("  PC settings OK: %s not in installed_packages" % pkg)
+    sys.exit(0)
+lst = [x for x in lst if x != pkg]
+data["installed_packages"] = lst
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=4)
+    f.write("\n")
+print("  removed %s from PC installed_packages (prevents channel overwrite)" % pkg)
+PYEOF
+        else
+            echo "  PC settings OK: ${PKG_NAME} not in installed_packages"
+        fi
+    fi
+
     echo "  ${YELLOW}Restart Sublime Text or reload the plugin.${NC}"
 }
 

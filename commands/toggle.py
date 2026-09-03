@@ -19,7 +19,10 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
             return
 
         fp = view.file_name()
-        if fp and tab_manager.is_alive(fp):
+        alive = tab_manager.is_alive(fp) if fp else False
+        log.info("toggle: enter file=%s alive=%s tabs=%d preview_open=%s"
+                  % (fp, alive, tab_manager.live_count(), is_preview_open()))
+        if fp and alive:
             log.debug("toggle: reuse live tab %s tabs=%d"
                       % (fp, tab_manager.live_count()))
             pin_os_open_file(fp)
@@ -27,6 +30,7 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
             focus_preview_tab(fp)
             render_view(view, force=True, open_browser=False)
             self.window.status_message("MarkdownPreviewEnhanced: focusing preview")
+            log.info("toggle: reuse path done")
             return
 
         log.debug("toggle: open preview file=%s preview_open=%s tabs=%d"
@@ -39,4 +43,5 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
             pin_os_open_file(fp)
         render_view(view, force=True, open_browser=False)
         url = tab_manager.preview_url(fp)
+        log.info("toggle: open path -> ensure_server + open_browser url=%s" % url)
         open_preview_browser(url, True)

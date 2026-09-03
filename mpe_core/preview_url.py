@@ -49,7 +49,11 @@ def open_preview_browser(url, focus_existing):
 
 
 def focus_preview_tab(file_path):
-    """Bring the existing preview tab for *file_path* to the front. No new tab."""
+    """Bring the existing preview tab for *file_path* to the front. No new tab.
+
+    If focusing fails (browser not detected / tab gone), fall back to opening
+    a new browser tab so the user always gets a visible preview.
+    """
     if not file_path:
         return
     url = tab_manager.preview_url(file_path)
@@ -59,8 +63,10 @@ def focus_preview_tab(file_path):
         try:
             ok = _browser.focus_existing_tab(url, log=preview_state.browser_log)
             if not ok:
-                log.debug("focus existing tab missed: %s" % url)
+                log.info("focus existing tab missed - opening new: %s" % url)
+                open_preview_browser(url, focus_existing=False)
         except Exception as e:
             log.error("focus existing tab failed: %s" % e)
+            open_preview_browser(url, focus_existing=False)
 
     threading.Thread(target=_work, daemon=True).start()
