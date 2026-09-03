@@ -1,0 +1,7 @@
+MarkdownPreviewEnhanced 0.2.1
+=============================
+
+- feat: click a Mermaid diagram to enlarge it (drag to pan, scroll wheel to zoom, Esc to close)
+- feat: dark mode re-renders Mermaid with the dark theme so diagrams stay readable
+- fix: zoom resizes the SVG instead of CSS scale, so flowcharts stay sharp
+- docs: document dark mode, Mermaid zoom, and scroll sync in the README
