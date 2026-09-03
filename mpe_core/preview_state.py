@@ -221,7 +221,12 @@ def _scroll_editor_to_line(line, view_id):
         pt = view.text_point(max(0, line - 1), 0)
         view.sel().clear()
         view.sel().add(sublime.Region(pt))
-        view.show_at_center(pt)
+        # Pin the line to the top of the viewport (same as the browser
+        # scrollToLine pad). show_at_center would put it mid-screen and
+        # look "off" relative to the preview.
+        xy = view.text_to_layout(pt)
+        vx, _vy = view.viewport_position()
+        view.set_viewport_position((vx, max(0, xy[1])), False)
     except Exception as e:
         log.debug("scroll editor failed: %s" % e)
 

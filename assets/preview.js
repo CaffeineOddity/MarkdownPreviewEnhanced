@@ -813,6 +813,40 @@
 
   // ── scroll sync (browser → editor) ───────────────────────────────────
 
+  // Slop when reading which block is at the top (browser → ST).
+  // Do NOT subtract this when scrolling TO a line — ST pins the line
+  // to the viewport top, and a 80px pad makes headers look "too low".
+  var SCROLL_PAD = 80;
+
+  function lineRange(el) {
+    var start = parseInt(el.getAttribute("data-line"), 10) || 0;
+    var endAttr = el.getAttribute("data-line-end");
+    var end = endAttr ? (parseInt(endAttr, 10) || start) : start;
+    if (end < start) end = start;
+    return { start: start, end: end };
+  }
+
+  function findTargetForLine(line) {
+    var nodes = document.querySelectorAll("[data-line]");
+    var covering = null;
+    var best = null;
+    var bestDiff = Infinity;
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var r = lineRange(el);
+      if (line >= r.start && line <= r.end) {
+        covering = el;
+        break;
+      }
+      var diff = line < r.start ? r.start - line : line - r.end;
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = el;
+      }
+    }
+    return covering || best;
+  }
+
   function findNearestLine() {
     var nodes = document.querySelectorAll("[data-line]");
     var best = 0;
@@ -821,10 +855,10 @@
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
       var top = el.getBoundingClientRect().top + viewTop;
-      var line = parseInt(el.getAttribute("data-line"), 10) || 0;
-      if (top <= viewTop + 80 && top > bestTop) {
+      var r = lineRange(el);
+      if (top <= viewTop + SCROLL_PAD && top > bestTop) {
         bestTop = top;
-        best = line;
+        best = r.start;
       }
     }
     return best;
@@ -834,36 +868,50 @@
   // 用户 wheel/touch 滚动时置回 "BS"。onScroll 只读不改。
   var _scrollFrom = "BS";
 
-  function scrollToLine(line, from) {
+  function anchorYForLine(el, line) {
+    // Document Y of the point that should sit in the middle of the viewport.
+    // Short blocks (headers, paragraphs): visual center of the element.
+    // Ranged blocks (mermaid / fenced code): interpolate through the element's
+    // height using the source line, so a click inside a tall diagram lands
+    // on that slice rather than always the top or the middle of the whole SVG.
+    var rect = el.getBoundingClientRect();
+    var top = rect.top + (window.scrollY || document.documentElement.scrollTop);
+    var h = rect.height || 0;
+    var r = lineRange(el);
+    if (r.end > r.start && h > 0) {
+      var t = (line - r.start) / (r.end - r.start);
+      if (t < 0) t = 0;
+      if (t > 1) t = 1;
+      return top + h * t;
+    }
+    return top + h / 2;
+  }
+
+  function scrollToLine(line, from, _retried) {
     if (from === "ST") _scrollFrom = "ST";
     if (!line) return;
-    var nodes = document.querySelectorAll("[data-line]");
-    var target = null;
-    var bestDiff = Infinity;
-    for (var i = 0; i < nodes.length; i++) {
-      var el = nodes[i];
-      var l = parseInt(el.getAttribute("data-line"), 10) || 0;
-      var diff = Math.abs(l - line);
-      if (diff < bestDiff) { bestDiff = diff; target = el; }
-      if (l === line) { target = el; break; }
-    }
-    if (target) {
-      var rect = target.getBoundingClientRect();
-      var y = rect.top + (window.scrollY || document.documentElement.scrollTop);
-      console.log(ts() + " [MDPP] scrollToLine line=" + line
-                  + " target=" + target.tagName + ":" + target.getAttribute("data-line")
-                  + " y=" + y + " scrollY=" + window.scrollY);
-      window.scrollTo(0, y);
-      // 100ms 后检查是否真的滚到位
-      setTimeout(function() {
-        console.log(ts() + " [MDPP] scrollToLine after 100ms scrollY=" + window.scrollY
-                    + " expected=" + y);
-      }, 100);
-      // 500ms 再检查一次（排除 smooth/anchoring 延迟）
-      setTimeout(function() {
-        console.log(ts() + " [MDPP] scrollToLine after 500ms scrollY=" + window.scrollY
-                    + " expected=" + y);
-      }, 500);
+    var target = findTargetForLine(line);
+    if (!target) return;
+    var mermaidPending = target.classList
+      && target.classList.contains("mermaid")
+      && !target.querySelector("svg");
+    var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+    var pointY = anchorYForLine(target, line);
+    var y = pointY - vh / 2;
+    if (y < 0) y = 0;
+    var docH = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
+    var maxY = Math.max(0, docH - vh);
+    if (y > maxY) y = maxY;
+    console.log(ts() + " [MDPP] scrollToLine line=" + line
+                + " target=" + target.tagName + ":" + target.getAttribute("data-line")
+                + (target.getAttribute("data-line-end")
+                   ? "-" + target.getAttribute("data-line-end") : "")
+                + " pointY=" + pointY + " y=" + y + " vh=" + vh
+                + " scrollY=" + window.scrollY);
+    window.scrollTo(0, y);
+    // mermaid.run() is async; height is wrong until the SVG is in. Retry once.
+    if (mermaidPending && !_retried) {
+      setTimeout(function () { scrollToLine(line, from, true); }, 120);
     }
   }
 
@@ -929,6 +977,14 @@
   window.mdppExportPng = function mdppExportPng() {
     setExportLoading("mdpp-export-png", true);
     var target = document.getElementById("mdpp-content") || document.body;
+    // 暗黑下浅色文字画在白底上不可见:渲染期间临时切回 light (issue #5)
+    var wasDark = document.documentElement.getAttribute("data-mdpp-theme") === "dark";
+    if (wasDark) {
+      document.documentElement.setAttribute("data-mdpp-theme", "light");
+    }
+    var restoreTheme = function () {
+      if (wasDark) document.documentElement.setAttribute("data-mdpp-theme", "dark");
+    };
     try {
       html2canvas(target, {
         scale: 2,
@@ -936,16 +992,19 @@
         allowTaint: true,
         backgroundColor: "#ffffff",
       }).then(function (canvas) {
+        restoreTheme();
         canvas.toBlob(function (blob) {
           var title = (document.title || "export").replace(/[^\w.-]/g, "_");
           downloadBlob(blob, title + ".png");
           setExportLoading("mdpp-export-png", false);
         }, "image/png");
       }).catch(function (err) {
+        restoreTheme();
         setExportLoading("mdpp-export-png", false);
         alert("PNG export failed.\n\n" + (err.message || ""));
       });
     } catch (err) {
+      restoreTheme();
       setExportLoading("mdpp-export-png", false);
       alert("PNG export requires html2canvas. Please check the browser console.");
     }
@@ -993,10 +1052,47 @@
     window.open("/presentation" + q, "_blank");
   };
 
+  // ── dark mode (issue #5) ─────────────────────────────────────────────
+
+  var THEME_KEY = "mdpp-theme";
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-mdpp-theme", theme);
+    var btn = $("mdpp-theme-toggle");
+    if (btn) {
+      // 按钮显示"切过去的目标"：light 页面显示 🌙（切暗色），dark 显示 ☀️（切亮色）
+      btn.textContent = theme === "dark" ? "☀️" : "🌙";
+      btn.title = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+    }
+  }
+
+  window.mdppToggleTheme = function mdppToggleTheme() {
+    var cur = document.documentElement.getAttribute("data-mdpp-theme") === "dark"
+      ? "light" : "dark";
+    applyTheme(cur);
+    try { localStorage.setItem(THEME_KEY, cur); } catch (e) {}
+  };
+
+  function initTheme() {
+    var saved = null;
+    try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+    if (saved !== "dark" && saved !== "light") {
+      // 无显式选择时跟随系统
+      saved = (window.matchMedia
+        && window.matchMedia("(prefers-color-scheme: dark)").matches)
+        ? "dark" : "light";
+    }
+    console.log(ts() + " [MDPP] initTheme saved=" + saved
+                + " prefersDark=" + (window.matchMedia
+                  && window.matchMedia("(prefers-color-scheme: dark)").matches));
+    applyTheme(saved);
+  }
+
   // ── init ─────────────────────────────────────────────────────────────
 
   window.mdppInit = function mdppInit() {
     console.log(ts() + " [MDPP] mdppInit called, bc=" + (typeof BroadcastChannel !== "undefined") + " mode=" + cfg.mode + " file=" + channelFile);
+    initTheme();
     restoreScroll();
     callRenderMath();
     bindTabList();

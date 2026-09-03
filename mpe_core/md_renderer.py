@@ -6,7 +6,7 @@ Features:
   - Tables, fenced code, codehilite (Pygments), TOC, attr_list, nl2br, footnotes
   - GFM task lists
   - Relative image rewrite (for local server or file://)
-  - Heading data-line attributes for scroll sync
+  - Heading and block-level data-line attributes for scroll sync
   - Math is extracted *before* markdown (so nl2br / escapes cannot break it),
     emitted as ``.mdpp-math`` nodes, and rendered client-side by KaTeX.
 """
@@ -219,7 +219,14 @@ def strip_frontmatter(text):
 def _collect_heading_lines(text):
     """Return list of (line_no 1-based, level, title) for ATX headings."""
     out = []
+    in_fence = False
     for i, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
         m = _ATX_HEADING_RE.match(line)
         if m:
             title = m.group(2).strip()
@@ -263,8 +270,8 @@ def _collect_block_lines(text):
     tag 取值: p, li, blockquote, pre, table, tr
     不标 ul/ol（容器）；blockquote 只标自身不标内部 p；
     table 标首个 | 行（表头），tr 标每个数据行。
-    mermaid/echarts fence 渲染后不是 <pre>，跳过。
-    \$\$...\$\$ 数学块渲染后是 <div>，跳过。
+    mermaid fence 标 <pre class="mermaid"> 的起止行；echarts 渲染成 div，跳过。
+    $$...$$ 数学块渲染后是 <div>，跳过。
     连续非空行 markdown 合并为一个 <p>，只标首行；
     连续 > 行合并为一个 <blockquote>，只标首行。
     """
@@ -274,10 +281,12 @@ def _collect_block_lines(text):
     in_paragraph = False
     in_blockquote = False
     in_math = False
+    fence_start = 0
+    fence_lang = ""
     for i, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
-        # 数学块 \$\$...\$\$
-        if stripped == "\$\$" or stripped.startswith("\$\$"):
+        # 数学块 $$...$$
+        if stripped == "$$" or stripped.startswith("$$"):
             if not in_math:
                 in_math = True
             else:
@@ -287,20 +296,21 @@ def _collect_block_lines(text):
             continue
         if in_math:
             continue
-        # fenced code
+        # fenced code / mermaid. Record on close so we have an end line.
         if stripped.startswith("```") or stripped.startswith("~~~"):
             in_paragraph = False
             in_blockquote = False
+            in_table = False
             if not in_fence:
                 in_fence = True
-                # mermaid/echarts fence 渲染后不是 <pre>，跳过
+                fence_start = i
                 m = _FENCE_LANG_RE.match(stripped)
-                lang = m.group(2).lower() if m else ""
-                if lang not in ("mermaid", "echarts"):
-                    out.append((i, "pre"))
+                fence_lang = m.group(2).lower() if m else ""
             else:
                 in_fence = False
-            in_table = False
+                if fence_lang != "echarts":
+                    out.append((fence_start, "pre", i))
+                fence_lang = ""
             continue
         if in_fence:
             continue
@@ -348,6 +358,8 @@ def _collect_block_lines(text):
                 in_paragraph = True
         else:
             in_paragraph = False
+    if in_fence and fence_lang != "echarts":
+        out.append((fence_start, "pre", i))
     return out
 
 
@@ -382,6 +394,8 @@ def _inject_block_lines(html, block_lines, line_offset):
         # 跳过容器
         if tag in ("ul", "ol", "tbody"):
             return full
+        if tag == "pre" and "mdpp-echarts" in rest:
+            return full
         # blockquote: 标自身，跳过内部 p
         if tag == "blockquote":
             in_blockquote[0] = True
@@ -391,12 +405,17 @@ def _inject_block_lines(html, block_lines, line_offset):
             return full
         if idx[0] >= len(block_lines):
             return full
-        ln, expected = block_lines[idx[0]]
+        item = block_lines[idx[0]]
+        ln, expected = item[0], item[1]
+        end_ln = item[2] if len(item) > 2 else ln
         if tag != expected:
             return full
         idx[0] += 1
         actual_line = ln + line_offset
-        return "<%s data-line=\"%d\"%s" % (m.group(2), actual_line, rest)
+        attrs = ' data-line="%d"' % actual_line
+        if end_ln > ln:
+            attrs += ' data-line-end="%d"' % (end_ln + line_offset)
+        return "<%s%s%s" % (m.group(2), attrs, rest)
 
     pattern = re.compile(
         r"<(/?)(p|li|blockquote|thead|tbody|tr|pre|table)(\b[^>]*>)",
@@ -802,6 +821,7 @@ def render(
         html = _apply_task_lists(html)
 
     html = _inject_heading_lines(html, heading_lines)
+    html = _inject_block_lines(html, block_lines, line_offset)
     html = rewrite_image_srcs(html, base_dir, mode=image_mode)
     html = rewrite_link_hrefs(html, base_dir, mode=image_mode)
 
