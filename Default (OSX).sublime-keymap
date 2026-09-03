@@ -1,8 +1,8 @@
 [
-    // MarkdownPreviewEnhanced example key bindings — macOS.
+    // MarkdownPreviewEnhanced default key binding — macOS.
     // 随包提供的默认快捷键(用户可在 User 层 keymap 覆盖或删除)。
+    // 只保留这一个默认绑定,避免覆盖系统/常用快捷键 (issue #6)。
+    // 其余命令(close/export/presentation/refresh)见命令面板,
+    // 需要快捷键可在 User/Default (OSX).sublime-keymap 自行绑定。
     { "keys": ["super+shift+m"], "command": "markdown_preview_enhanced_toggle" },
-    { "keys": ["super+shift+alt+m"], "command": "markdown_preview_enhanced_close" },
-    { "keys": ["super+shift+e"], "command": "markdown_preview_enhanced_export_html" },
-    { "keys": ["super+shift+p"], "command": "markdown_preview_enhanced_presentation" },
 ]

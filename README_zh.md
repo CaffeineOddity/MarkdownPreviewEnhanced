@@ -30,15 +30,9 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 
 ## 用法
 
-打开 `.md` 文件后：
+打开 `.md` 文件后按 `Cmd+Shift+M`（Windows / Linux：`Ctrl+Shift+M`）打开 / 聚焦预览。
 
-| macOS | Windows / Linux | 作用 |
-| --- | --- | --- |
-| `Cmd+Shift+M` | `Ctrl+Shift+M` | 打开 / 聚焦预览 |
-| `Cmd+Shift+Alt+M` | `Ctrl+Shift+Alt+M` | 关闭预览 tab（无活 tab 后停服） |
-| `Cmd+Shift+E` | `Ctrl+Shift+E` | 导出 HTML |
-
-命令面板里还有 Toggle、Close、Refresh、Presentation Mode、Export HTML、Export PDF。
+这是唯一的默认快捷键（issue #6 —— 不覆盖系统常用快捷键）。关闭、刷新、演示模式、导出 HTML / PDF 都在命令面板里；需要快捷键可在 `User/Default (OSX).sublime-keymap` 自行绑定。
 
 编辑时浏览器原地更新（SSE），滚动位置保留。再按一次快捷键会聚焦已有标签，不会再叠一张。浏览器里切预览 tab，Sublime 会切到对应 view，反过来也一样。
 

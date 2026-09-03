@@ -30,15 +30,9 @@ Or clone this repo to `Packages/MarkdownPreviewEnhanced/` (repo root = package r
 
 ## Usage
 
-Open a `.md` file, then:
+Open a `.md` file, then press `Cmd+Shift+M` (Windows / Linux: `Ctrl+Shift+M`) to open / focus the preview.
 
-| macOS | Windows / Linux | Action |
-| --- | --- | --- |
-| `Cmd+Shift+M` | `Ctrl+Shift+M` | Open / focus preview |
-| `Cmd+Shift+Alt+M` | `Ctrl+Shift+Alt+M` | Close preview tabs (server stops when idle) |
-| `Cmd+Shift+E` | `Ctrl+Shift+E` | Export HTML |
-
-Command Palette also has Toggle, Close, Refresh, Presentation Mode, Export HTML, Export PDF.
+This is the only default key binding (issue #6 — don't shadow common shortcuts). Close, Refresh, Presentation Mode, Export HTML and Export PDF are available from the Command Palette; add your own bindings in `User/Default (OSX).sublime-keymap` if wanted.
 
 Edit the file — the browser updates in place (SSE), scroll is kept. Press the shortcut again to focus the existing tab (does not stack another tab). Switching a preview tab in the browser focuses the matching Sublime view, and the other way around.
 
