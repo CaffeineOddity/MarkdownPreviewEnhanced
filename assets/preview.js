@@ -83,6 +83,206 @@
     }
   }
 
+  function currentMermaidTheme() {
+    return document.documentElement.getAttribute("data-mdpp-theme") === "dark"
+      ? "dark" : "default";
+  }
+
+  function stashMermaidSources() {
+    var nodes = document.querySelectorAll(".mermaid");
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (el.getAttribute("data-mdpp-src")) continue;
+      if (el.querySelector("svg")) continue;
+      el.setAttribute("data-mdpp-src", el.textContent);
+    }
+  }
+
+  function restoreMermaidSources() {
+    var nodes = document.querySelectorAll(".mermaid[data-mdpp-src]");
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var src = el.getAttribute("data-mdpp-src");
+      if (src == null) continue;
+      el.removeAttribute("data-processed");
+      el.removeAttribute("data-mermaid-id");
+      el.textContent = src;
+    }
+  }
+
+  function renderMermaid() {
+    if (typeof window.mermaid === "undefined") return;
+    stashMermaidSources();
+    restoreMermaidSources();
+    try {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: currentMermaidTheme(),
+        securityLevel: "loose",
+        // HTML labels rasterize and look soft; SVG text stays sharp when zoomed.
+        flowchart: { htmlLabels: false },
+        sequence: { useMaxWidth: true },
+      });
+      mermaid.run({ querySelector: ".mermaid" }).catch(function (e) {
+        console.warn("[MDPP] mermaid run error", e);
+      });
+    } catch (e) {
+      console.warn("[MDPP] mermaid init", e);
+    }
+  }
+  window.mdppRenderMermaid = renderMermaid;
+
+  var _mermaidZoomScale = 1;
+  var _mermaidZoomX = 0;
+  var _mermaidZoomY = 0;
+  var _mermaidZoomBaseW = 0;
+
+  function mermaidZoomMover() {
+    var el = $("mdpp-mermaid-zoom");
+    return el ? el.querySelector(".mdpp-mermaid-zoom-mover") : null;
+  }
+
+  function mermaidZoomSvg() {
+    var el = $("mdpp-mermaid-zoom");
+    return el ? el.querySelector(".mdpp-mermaid-zoom-canvas svg") : null;
+  }
+
+  function applyMermaidZoomTransform() {
+    var mover = mermaidZoomMover();
+    var svg = mermaidZoomSvg();
+    if (!mover || !svg) return;
+    // Resize the SVG itself (vector) instead of CSS scale(), which
+    // rasterizes and looks blurry. Pan with translate only.
+    var w = Math.max(40, _mermaidZoomBaseW * _mermaidZoomScale);
+    svg.style.width = w + "px";
+    svg.style.height = "auto";
+    mover.style.transform = "translate(-50%, -50%) translate("
+      + _mermaidZoomX + "px," + _mermaidZoomY + "px)";
+  }
+
+  function mermaidZoomRoot() {
+    var el = $("mdpp-mermaid-zoom");
+    if (el) return el;
+    el = document.createElement("div");
+    el.id = "mdpp-mermaid-zoom";
+    el.className = "mdpp-mermaid-zoom";
+    el.hidden = true;
+    el.innerHTML =
+      '<div class="mdpp-mermaid-zoom-backdrop"></div>'
+      + '<div class="mdpp-mermaid-zoom-stage" role="dialog" aria-modal="true"'
+      + ' aria-label="Mermaid diagram">'
+      + '<button type="button" class="mdpp-mermaid-zoom-close" aria-label="Close">×</button>'
+      + '<div class="mdpp-mermaid-zoom-hint">拖动平移 · 滚轮缩放 · Esc 关闭</div>'
+      + '<div class="mdpp-mermaid-zoom-canvas"><div class="mdpp-mermaid-zoom-mover"></div></div></div>';
+    document.body.appendChild(el);
+    var canvas = el.querySelector(".mdpp-mermaid-zoom-canvas");
+    var drag = { on: false, moved: false, x: 0, y: 0 };
+
+    el.addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (t === el || (t.classList && (t.classList.contains("mdpp-mermaid-zoom-backdrop")
+          || t.classList.contains("mdpp-mermaid-zoom-close")))) {
+        closeMermaidZoom();
+      }
+    });
+    el.addEventListener("wheel", function (ev) {
+      if (el.hidden) return;
+      ev.preventDefault();
+      var dy = ev.deltaY;
+      if (ev.deltaMode === 1) dy *= 16;
+      if (ev.deltaMode === 2) dy *= 80;
+      _mermaidZoomScale = Math.min(6, Math.max(0.4,
+        _mermaidZoomScale * Math.exp(-dy * 0.0009)));
+      applyMermaidZoomTransform();
+    }, { passive: false });
+
+    canvas.addEventListener("pointerdown", function (ev) {
+      if (ev.button !== 0) return;
+      drag.on = true;
+      drag.moved = false;
+      drag.x = ev.clientX;
+      drag.y = ev.clientY;
+      canvas.classList.add("is-dragging");
+      try { canvas.setPointerCapture(ev.pointerId); } catch (err) {}
+      ev.preventDefault();
+    });
+    canvas.addEventListener("pointermove", function (ev) {
+      if (!drag.on) return;
+      var dx = ev.clientX - drag.x;
+      var dy = ev.clientY - drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true;
+      drag.x = ev.clientX;
+      drag.y = ev.clientY;
+      _mermaidZoomX += dx;
+      _mermaidZoomY += dy;
+      applyMermaidZoomTransform();
+    });
+    function endDrag(ev) {
+      if (!drag.on) return;
+      drag.on = false;
+      canvas.classList.remove("is-dragging");
+      try { canvas.releasePointerCapture(ev.pointerId); } catch (err) {}
+    }
+    canvas.addEventListener("pointerup", endDrag);
+    canvas.addEventListener("pointercancel", endDrag);
+    canvas.addEventListener("click", function (ev) {
+      if (drag.moved) ev.stopPropagation();
+      drag.moved = false;
+    });
+    return el;
+  }
+
+  function openMermaidZoom(srcEl) {
+    var svg = srcEl.querySelector("svg");
+    if (!svg) return;
+    var el = mermaidZoomRoot();
+    var mover = el.querySelector(".mdpp-mermaid-zoom-mover");
+    mover.innerHTML = "";
+    var clone = svg.cloneNode(true);
+    clone.removeAttribute("width");
+    clone.removeAttribute("height");
+    clone.style.maxWidth = "none";
+    clone.style.maxHeight = "none";
+    var vb = clone.viewBox && clone.viewBox.baseVal;
+    var natural = (vb && vb.width) ? vb.width : (svg.getBoundingClientRect().width || 800);
+    var w = Math.min(Math.max(natural, 360), Math.floor(window.innerWidth * 0.7));
+    _mermaidZoomBaseW = w;
+    _mermaidZoomScale = 1;
+    _mermaidZoomX = 0;
+    _mermaidZoomY = 0;
+    mover.appendChild(clone);
+    applyMermaidZoomTransform();
+    el.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeMermaidZoom() {
+    var el = $("mdpp-mermaid-zoom");
+    if (!el || el.hidden) return;
+    el.hidden = true;
+    var mover = el.querySelector(".mdpp-mermaid-zoom-mover");
+    if (mover) mover.innerHTML = "";
+    document.body.style.overflow = "";
+    _mermaidZoomScale = 1;
+    _mermaidZoomX = 0;
+    _mermaidZoomY = 0;
+  }
+
+  function bindMermaidZoom() {
+    if (bindMermaidZoom._bound) return;
+    bindMermaidZoom._bound = true;
+    document.addEventListener("click", function (ev) {
+      var zoom = $("mdpp-mermaid-zoom");
+      if (zoom && !zoom.hidden) return;
+      var content = $("mdpp-content");
+      var m = ev.target.closest ? ev.target.closest(".mermaid") : null;
+      if (!m || !content || !content.contains(m)) return;
+      if (!m.querySelector("svg")) return;
+      ev.preventDefault();
+      openMermaidZoom(m);
+    });
+  }
+
   function applyContent(data) {
     var content = $("mdpp-content");
     if (content && typeof data.html === "string") {
@@ -93,9 +293,7 @@
     }
     callRenderMath();
     if (typeof window.mdppRenderEcharts === "function") window.mdppRenderEcharts();
-    if (typeof window.mermaid !== "undefined") {
-      mermaid.run().catch(function (e) { console.warn("[MDPP] mermaid run error", e); });
-    }
+    renderMermaid();
     bindTocClicks();
     tocActiveId = null;
     updateTocActive();
@@ -1064,6 +1262,7 @@
       btn.textContent = theme === "dark" ? "☀️" : "🌙";
       btn.title = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
     }
+    renderMermaid();
   }
 
   window.mdppToggleTheme = function mdppToggleTheme() {
@@ -1098,13 +1297,17 @@
     bindTabList();
     bindPreviewDocLinks();
     bindTocClicks();
+    bindMermaidZoom();
     updateTocActive();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("wheel", onUserScroll, { passive: true });
     window.addEventListener("touchmove", onUserScroll, { passive: true });
     window.addEventListener("beforeunload", saveScroll);
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") window.mdppCloseSponsor();
+      if (e.key === "Escape") {
+        closeMermaidZoom();
+        window.mdppCloseSponsor();
+      }
     });
 
     if (cfg.mode === "server") {

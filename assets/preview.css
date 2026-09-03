@@ -491,6 +491,20 @@ body {
   border: 1px solid var(--mdpp-border-muted);
   border-radius: var(--mdpp-radius);
   overflow: auto;
+  cursor: zoom-in;
+}
+.markdown-body pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+html[data-mdpp-theme="dark"] .markdown-body pre.mermaid {
+  background: #1e1e1e;
+  border-color: var(--mdpp-border);
+}
+html[data-mdpp-theme="dark"] .markdown-body pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
 }
 .markdown-body .mermaid-svg {
   text-align: center;
@@ -723,6 +737,89 @@ body {
 }
 .mdpp-modal-hint a {
   color: var(--mdpp-link);
+}
+
+.mdpp-mermaid-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mdpp-mermaid-zoom[hidden] {
+  display: none !important;
+}
+.mdpp-mermaid-zoom-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 17, 21, 0.72);
+}
+.mdpp-mermaid-zoom-stage {
+  position: relative;
+  z-index: 1;
+  width: 92vw;
+  height: 88vh;
+  max-width: 92vw;
+  max-height: 88vh;
+  box-sizing: border-box;
+  padding: 36px 16px 16px;
+  background: var(--mdpp-surface);
+  border: 1px solid var(--mdpp-border);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+.mdpp-mermaid-zoom-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--mdpp-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.mdpp-mermaid-zoom-close:hover {
+  color: var(--mdpp-fg);
+}
+.mdpp-mermaid-zoom-hint {
+  position: absolute;
+  top: 10px;
+  left: 16px;
+  font-size: 12px;
+  color: var(--mdpp-muted);
+}
+.mdpp-mermaid-zoom-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.mdpp-mermaid-zoom-canvas.is-dragging {
+  cursor: grabbing;
+}
+.mdpp-mermaid-zoom-mover {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.mdpp-mermaid-zoom-canvas svg {
+  display: block;
+  pointer-events: none;
+}
+
+@media print {
+  .mdpp-mermaid-zoom {
+    display: none !important;
+  }
 }
 
 
