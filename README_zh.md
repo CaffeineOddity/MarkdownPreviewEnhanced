@@ -14,11 +14,12 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 | ✅ SSE 原地更新（不刷新） | ✅ 代码高亮 |
 | ✅ 一文件一预览 tab | ✅ GFM 任务列表 |
 | ✅ 编辑器 ↔ 预览 tab 互切 | ✅ 脚注 |
-| ✅ 滚动位置保留 | ✅ YAML frontmatter |
+| ✅ 滚动同步（编辑器 ↔ 预览） | ✅ YAML frontmatter |
 | ✅ 目录 + 预览 tab 列表 | ✅ KaTeX（`$…$` / `$$…$$`） |
-| ✅ 演示模式（16:9 幻灯片） | ✅ Mermaid 图 |
-| ✅ 相对路径图片（`./img/a.png`） | ✅ ECharts |
-| ✅ 导出 HTML / PNG / PDF | ✅ 零额外依赖 |
+| ✅ 演示模式（16:9 幻灯片） | ✅ Mermaid 图（点击放大） |
+| ✅ 暗色模式（跟随系统，可记住） | ✅ ECharts |
+| ✅ 相对路径图片（`./img/a.png`） | ✅ 零额外依赖 |
+| ✅ 导出 HTML / PNG / PDF | |
 | ✅ 自定义 CSS 和 favicon | |
 | ✅ macOS / Windows / Linux | |
 
@@ -38,7 +39,9 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 
 把已有预览 URL 粘到新标签时，会接管该文件的旧会话（Chrome 对「自己新建再粘贴」的标签可能不让脚本关，旧页会提示你手动关）。只要还有预览 tab 开着，本地服务器就保持；全部关掉后很快停服。
 
-预览侧栏工具条：🖼️ 导出 PNG，💾 导出独立 HTML，📽️ 演示模式，☕ tip。
+预览侧栏工具条：🖼️ 导出 PNG，💾 导出独立 HTML，📽️ 演示模式，🌙 / ☀️ 暗色模式，☕ tip。
+
+暗色模式默认跟随系统，点过一次后记在浏览器里。暗色下 Mermaid 用暗色主题。点击 Mermaid 图进入放大（拖动平移、滚轮缩放、`Esc` 关闭）。在 Sublime 里点某一行，预览会把对应块滚到窗口中间（Mermaid 围栏里的行也会对上图里的位置）。
 
 ### 演示模式
 
@@ -50,7 +53,7 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 
 | 设置 | 默认 | 说明 |
 | --- | --- | --- |
-| `mermaid_theme` | `"default"` | `default` / `dark` / `forest` / `neutral` |
+| `mermaid_theme` | `"default"` | 导出 / 文件模式：`default` / `dark` / `forest` / `neutral`。实时预览跟随页面明暗。 |
 | `output_dir` | `""` | 空 = Sublime 缓存目录 |
 | `use_local_server` | `true` | SSE、相对图片、滚动同步 |
 | `server_port` | `8765` | 占用时会尝试后续端口 |

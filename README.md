@@ -14,11 +14,12 @@ Browser live Markdown preview for Sublime Text 4. No extra installs.
 | ✅ SSE in-place update (no reload) | ✅ Syntax highlighting |
 | ✅ One file ↔ one preview tab | ✅ GFM task lists |
 | ✅ Editor ↔ preview tab switch | ✅ Footnotes |
-| ✅ Scroll position kept | ✅ YAML frontmatter |
+| ✅ Scroll sync (editor ↔ preview) | ✅ YAML frontmatter |
 | ✅ TOC + preview tab list | ✅ KaTeX (`$…$` / `$$…$$`) |
-| ✅ Presentation mode (16:9 slides) | ✅ Mermaid diagrams |
-| ✅ Relative images (`./img/a.png`) | ✅ ECharts |
-| ✅ Export HTML / PNG / PDF | ✅ No extra installs |
+| ✅ Presentation mode (16:9 slides) | ✅ Mermaid diagrams (click to zoom) |
+| ✅ Dark mode (follows system, persisted) | ✅ ECharts |
+| ✅ Relative images (`./img/a.png`) | ✅ No extra installs |
+| ✅ Export HTML / PNG / PDF | |
 | ✅ Custom CSS & favicon | |
 | ✅ macOS / Windows / Linux | |
 
@@ -38,7 +39,9 @@ Edit the file — the browser updates in place (SSE), scroll is kept. Press the 
 
 If you paste a preview URL into a new browser tab, the old tab for that file is replaced (Chrome may block `window.close()` on tabs you created yourself; those show a banner instead). The local server stays up while any preview tab is open, and stops shortly after the last one closes.
 
-Preview sidebar toolbar: 🖼️ PNG snapshot, 💾 standalone HTML, 📽️ presentation, ☕ tip.
+Preview sidebar toolbar: 🖼️ PNG snapshot, 💾 standalone HTML, 📽️ presentation, 🌙 / ☀️ dark mode, ☕ tip.
+
+Dark mode follows `prefers-color-scheme` until you toggle it; the choice is stored in the browser. Mermaid uses its `dark` theme with the page. Click a Mermaid diagram to enlarge it (drag to pan, scroll wheel to zoom, `Esc` to close). Clicking a line in Sublime scrolls that block to the middle of the preview (including lines inside a Mermaid fence).
 
 ### Presentation mode
 
@@ -50,7 +53,7 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `mermaid_theme` | `"default"` | `default` / `dark` / `forest` / `neutral` |
+| `mermaid_theme` | `"default"` | Export / file-mode diagrams: `default` / `dark` / `forest` / `neutral`. Live preview follows the page theme. |
 | `output_dir` | `""` | Empty = Sublime cache |
 | `use_local_server` | `true` | SSE, images, scroll sync |
 | `server_port` | `8765` | Tries the next ports if busy |
