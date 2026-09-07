@@ -22,6 +22,24 @@ if "sublime" not in sys.modules:
     _sublime.version = lambda: 4107
     sys.modules["sublime"] = _sublime
 
+# commands/ 里的 TextCommand 基类也需要 stub
+if "sublime_plugin" not in sys.modules:
+    _sp = types.ModuleType("sublime_plugin")
+
+    class _TextCommand:  # noqa: D101 - 测试不实例化
+        pass
+
+    class _WindowCommand:  # noqa: D101
+        pass
+
+    class _EventListener:  # noqa: D101
+        pass
+
+    _sp.TextCommand = _TextCommand
+    _sp.WindowCommand = _WindowCommand
+    _sp.EventListener = _EventListener
+    sys.modules["sublime_plugin"] = _sp
+
 # ── markdown from mdpopups (bypasses mdpopups/__init__ which needs ST) ──────
 _MDPOPUPS_DIR = os.path.expanduser(
     "~/Library/Application Support/Sublime Text/Lib/python38/mdpopups")

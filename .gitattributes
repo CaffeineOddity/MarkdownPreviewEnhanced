@@ -36,3 +36,4 @@
 *.sublime-project   export-ignore
 *.sublime-workspace export-ignore
 *.sublime-keymap.example export-ignore
+/specs/              export-ignore
