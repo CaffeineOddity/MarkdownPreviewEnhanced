@@ -92,6 +92,7 @@ should_exclude() {
         .DS_Store|*/.DS_Store|.gitignore|.gitattributes) return 0 ;;
         build.sh|release.sh|st_package_reviewer.sh|AGENTS.md|README.md|README_zh.md|CONTRIBUTING.md|LICENSE) return 0 ;;
         docs|docs/*|img|img/*|dist|dist/*) return 0 ;;
+        tests|tests/*|specs|specs/*) return 0 ;;
         *.sublime-project|*.sublime-workspace) return 0 ;;
         repository.json|repository.json.example) return 0 ;;
         .gitcafe/*|.gitcafe) return 0 ;;
