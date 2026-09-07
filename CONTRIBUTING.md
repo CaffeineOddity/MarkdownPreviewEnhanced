@@ -17,6 +17,12 @@ This GitHub repo root **is** the Sublime package root. Do not nest plugin module
 
 `-i` installs to `Installed Packages/` (same layout as Package Control). Prefer committing before `--from-git` / `release.sh`.
 
+## Tests
+
+```bash
+python3 tests/run_all.py        # unit tests (uses mdpopups under ST's Lib/python38)
+```
+
 ## Architecture
 
 ```
@@ -72,6 +78,8 @@ Use `mpe_core.log`: `info` / `error` always print (few lines); `debug` is verbos
 ```
 
 打 tag 前先提交。
+
+测试：`python3 tests/run_all.py`（使用 ST `Lib/python38` 下的 mdpopups）。
 
 架构与接口见上文表格。调试文件在 `output_dir`（默认 Sublime 缓存）：`preview.html`、`body.html`、`debug.log`。
 

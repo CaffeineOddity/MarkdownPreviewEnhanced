@@ -31,6 +31,9 @@
     // Enable KaTeX math ($...$, $$...$$, \\(...\\), \\[...\\]).
     "enable_katex": true,
 
+    // Enable GFM emoji shortcodes (:smile: → 😄). Unknown aliases stay as-is.
+    "enable_emoji": true,
+
     // Enable GFM task lists (- [ ] / - [x]).
     "enable_task_lists": true,
 

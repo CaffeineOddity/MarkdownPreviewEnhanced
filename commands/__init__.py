@@ -4,6 +4,7 @@ Each command class lives in its own module. Importing them here (and from
 ``MarkdownPreviewEnhanced.py``) registers them with Sublime.
 """
 from .close import MarkdownPreviewEnhancedCloseCommand  # noqa: F401
+from .copy_rich_text import MarkdownPreviewEnhancedCopyRichTextCommand  # noqa: F401
 from .export_html import MarkdownPreviewEnhancedExportHtmlCommand  # noqa: F401
 from .export_pdf import MarkdownPreviewEnhancedExportPdfCommand  # noqa: F401
 from .presentation import MarkdownPreviewEnhancedPresentationCommand  # noqa: F401

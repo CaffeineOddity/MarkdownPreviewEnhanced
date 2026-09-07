@@ -14,11 +14,13 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 | ✅ SSE 原地更新（不刷新） | ✅ 代码高亮 |
 | ✅ 一文件一预览 tab | ✅ GFM 任务列表 |
 | ✅ 编辑器 ↔ 预览 tab 互切 | ✅ 脚注 |
-| ✅ 滚动同步（编辑器 ↔ 预览） | ✅ YAML frontmatter |
-| ✅ 目录 + 预览 tab 列表 | ✅ KaTeX（`$…$` / `$$…$$`） |
-| ✅ 演示模式（16:9 幻灯片） | ✅ Mermaid 图（点击放大） |
-| ✅ 暗色模式（跟随系统，可记住） | ✅ ECharts |
-| ✅ 相对路径图片（`./img/a.png`） | ✅ 零额外依赖 |
+| ✅ 滚动同步（编辑器 ↔ 预览） | ✅ GFM emoji（`:smile:`） |
+| ✅ 目录 + 预览 tab 列表 | ✅ YAML frontmatter |
+| ✅ 演示模式（16:9 幻灯片） | ✅ KaTeX（`$…$` / `$$…$$`） |
+| ✅ 暗色模式（跟随系统，可记住） | ✅ Mermaid 图（点击放大） |
+| ✅ 复制为富文本（📋 / 命令） | ✅ ECharts |
+| ✅ 代码块复制按钮 | ✅ 零额外依赖 |
+| ✅ 相对路径图片（`./img/a.png`） | |
 | ✅ 导出 HTML / PNG / PDF | |
 | ✅ 自定义 CSS 和 favicon | |
 | ✅ macOS / Windows / Linux | |
@@ -39,7 +41,9 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 
 把已有预览 URL 粘到新标签时，会接管该文件的旧会话（Chrome 对「自己新建再粘贴」的标签可能不让脚本关，旧页会提示你手动关）。只要还有预览 tab 开着，本地服务器就保持；全部关掉后很快停服。
 
-预览侧栏工具条：🖼️ 导出 PNG，💾 导出独立 HTML，📽️ 演示模式，🌙 / ☀️ 暗色模式，☕ tip。
+预览侧栏工具条：📋 复制为富文本，🖼️ 导出 PNG，💾 导出独立 HTML，📽️ 演示模式，🌙 / ☀️ 暗色模式，☕ tip。
+
+鼠标悬停预览里的代码块会出现 **Copy** 按钮，一键复制代码原文。**复制为富文本**把渲染后的 HTML 放进剪贴板（浏览器按钮，或命令面板里的 **MarkdownPreviewEnhanced: Copy as Rich Text**），可直接粘贴进邮件、Word、Confluence 并保留样式。Linux 上编辑器命令需要 `xclip` 或 `wl-copy`；浏览器按钮不受此限制。
 
 暗色模式默认跟随系统，点过一次后记在浏览器里。暗色下 Mermaid 用暗色主题。点击 Mermaid 图进入放大（拖动平移、滚轮缩放、`Esc` 关闭）。在 Sublime 里点某一行，预览会把对应块滚到窗口中间（Mermaid 围栏里的行也会对上图里的位置）。
 
@@ -62,6 +66,7 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | `debounce_ms` | `500` | 输入时的重渲染延迟 |
 | `show_toc` | `true` | 目录侧栏 |
 | `enable_katex` | `true` | `$...$` / `$$...$$` |
+| `enable_emoji` | `true` | GFM emoji shortcode（`:smile:`） |
 | `enable_task_lists` | `true` | `- [ ]` / `- [x]` |
 | `enable_footnotes` | `true` | `[^1]` |
 | `strip_frontmatter` | `true` | 去掉文首 YAML `---` |

@@ -53,6 +53,7 @@ def render_settings():
         "mermaid_theme": config.get("mermaid_theme", "default") or "default",
         "enable_footnotes": bool(config.get("enable_footnotes", True)),
         "enable_task_lists": bool(config.get("enable_task_lists", True)),
+        "enable_emoji": bool(config.get("enable_emoji", True)),
         "enable_toc": bool(config.get("show_toc", True)),
         "strip_yaml": bool(config.get("strip_frontmatter", True)),
         "enable_math": bool(config.get("enable_katex", True)),
@@ -187,6 +188,7 @@ def render_view(view, force=False, open_browser=False, focus_browser=False):
                 enable_toc=rs["enable_toc"],
                 strip_yaml=rs["strip_yaml"],
                 enable_math=rs["enable_math"],
+                enable_emoji=rs["enable_emoji"],
             )
             if result.get("errors"):
                 log.error("render errors: %r" % result["errors"])

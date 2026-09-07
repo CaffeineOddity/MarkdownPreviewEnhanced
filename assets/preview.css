@@ -411,6 +411,51 @@ body {
   box-shadow: none;
 }
 
+/* ── code block copy button ─────────────────────────────────────────── */
+.markdown-body pre {
+  position: relative;
+}
+
+.mdpp-code-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 3px 10px;
+  font-family: var(--mdpp-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--mdpp-muted);
+  background: var(--mdpp-surface);
+  border: 1px solid var(--mdpp-border-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.markdown-body pre:hover .mdpp-code-copy,
+.mdpp-code-copy:focus-visible {
+  opacity: 1;
+}
+
+.mdpp-code-copy:hover {
+  color: var(--mdpp-fg);
+  background: var(--mdpp-surface-2);
+}
+
+.mdpp-code-copy.mdpp-copied {
+  opacity: 1;
+  color: #1a7f37;
+}
+
+html[data-mdpp-theme="dark"] .mdpp-code-copy.mdpp-copied {
+  color: #3fb950;
+}
+
+@media print {
+  .mdpp-code-copy { display: none !important; }
+}
+
 /* ── quotes / rules / images ──────────────────────────────────────────── */
 .markdown-body blockquote {
   margin: 0 0 1.1em;

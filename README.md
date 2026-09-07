@@ -14,11 +14,13 @@ Browser live Markdown preview for Sublime Text 4. No extra installs.
 | ✅ SSE in-place update (no reload) | ✅ Syntax highlighting |
 | ✅ One file ↔ one preview tab | ✅ GFM task lists |
 | ✅ Editor ↔ preview tab switch | ✅ Footnotes |
-| ✅ Scroll sync (editor ↔ preview) | ✅ YAML frontmatter |
-| ✅ TOC + preview tab list | ✅ KaTeX (`$…$` / `$$…$$`) |
-| ✅ Presentation mode (16:9 slides) | ✅ Mermaid diagrams (click to zoom) |
-| ✅ Dark mode (follows system, persisted) | ✅ ECharts |
-| ✅ Relative images (`./img/a.png`) | ✅ No extra installs |
+| ✅ Scroll sync (editor ↔ preview) | ✅ GFM emoji (`:smile:`) |
+| ✅ TOC + preview tab list | ✅ YAML frontmatter |
+| ✅ Presentation mode (16:9 slides) | ✅ KaTeX (`$…$` / `$$…$$`) |
+| ✅ Dark mode (follows system, persisted) | ✅ Mermaid diagrams (click to zoom) |
+| ✅ Copy as rich text (📋 / command) | ✅ ECharts |
+| ✅ Code block copy button | ✅ No extra installs |
+| ✅ Relative images (`./img/a.png`) | |
 | ✅ Export HTML / PNG / PDF | |
 | ✅ Custom CSS & favicon | |
 | ✅ macOS / Windows / Linux | |
@@ -39,7 +41,9 @@ Edit the file — the browser updates in place (SSE), scroll is kept. Press the 
 
 If you paste a preview URL into a new browser tab, the old tab for that file is replaced (Chrome may block `window.close()` on tabs you created yourself; those show a banner instead). The local server stays up while any preview tab is open, and stops shortly after the last one closes.
 
-Preview sidebar toolbar: 🖼️ PNG snapshot, 💾 standalone HTML, 📽️ presentation, 🌙 / ☀️ dark mode, ☕ tip.
+Preview sidebar toolbar: 📋 copy as rich text, 🖼️ PNG snapshot, 💾 standalone HTML, 📽️ presentation, 🌙 / ☀️ dark mode, ☕ tip.
+
+Hover any code block in the preview for a **Copy** button. **Copy as rich text** puts the rendered HTML on the clipboard (browser button, or `MarkdownPreviewEnhanced: Copy as Rich Text` in the Command Palette) so it can be pasted into mail, Word, or Confluence with styling intact. On Linux the command needs `xclip` or `wl-copy`; the browser button works everywhere.
 
 Dark mode follows `prefers-color-scheme` until you toggle it; the choice is stored in the browser. Mermaid uses its `dark` theme with the page. Click a Mermaid diagram to enlarge it (drag to pan, scroll wheel to zoom, `Esc` to close). Clicking a line in Sublime scrolls that block to the middle of the preview (including lines inside a Mermaid fence).
 
@@ -62,6 +66,7 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | `debounce_ms` | `500` | Re-render delay while typing |
 | `show_toc` | `true` | TOC sidebar |
 | `enable_katex` | `true` | `$...$` / `$$...$$` |
+| `enable_emoji` | `true` | GFM emoji shortcodes (`:smile:`) |
 | `enable_task_lists` | `true` | `- [ ]` / `- [x]` |
 | `enable_footnotes` | `true` | `[^1]` |
 | `strip_frontmatter` | `true` | Strip leading `---` YAML |

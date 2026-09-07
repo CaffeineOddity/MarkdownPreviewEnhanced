@@ -285,6 +285,8 @@ def build_preview_shell(
 
     toolbar_html = (
         '<div class="mdpp-toolbar mdpp-toolbar-sidebar">\n'
+        '<button id="mdpp-copy-rich" title="Copy as rich text"'
+        ' onclick="mdppCopyRich()">📋</button>\n'
         '<button id="mdpp-export-png" title="Export PNG" onclick="mdppExportPng()">🖼️</button>\n'
         '<button id="mdpp-export-html" title="Export HTML" onclick="mdppExportHtml()">💾</button>\n'
         '<button id="mdpp-presentation" title="Presentation mode (slides)"'
@@ -516,6 +518,45 @@ def build_export_html(
         echarts_tag,
         _katex_rerender_snippet(enable_katex),
     )
+
+
+def build_clipboard_html(body_html, title="Markdown Preview"):
+    """Minimal styled HTML document for the clipboard (ST Copy-as-rich-text).
+
+    Wraps the rendered body with the same preview.css so pasted content keeps
+    headings / tables / code styling in rich-text targets (mail, Word, ...).
+    """
+    css = _load_asset("preview.css")
+    hl_css = _load_asset("highlight.css")
+    if not css:
+        # Resource loader unavailable (e.g. tests) — read from disk.
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        for name in ("assets/preview.css", "assets/highlight.css"):
+            try:
+                with open(os.path.join(root, name), "r",
+                          encoding="utf-8") as f:
+                    data = f.read()
+                if name.endswith("preview.css"):
+                    css = data
+                else:
+                    hl_css = data
+            except Exception:
+                pass
+    return (
+        "<!DOCTYPE html>\n"
+        "<html>\n"
+        "<head>\n"
+        "<meta charset=\"utf-8\">\n"
+        "<title>%s</title>\n"
+        "<style>\n%s\n%s\n"
+        "body{background:#fff;color:#24292f;margin:0;padding:24px;}\n"
+        "</style>\n"
+        "</head>\n"
+        "<body>\n"
+        '<main class="markdown-body">%s</main>\n'
+        "</body>\n"
+        "</html>\n"
+    ) % (_escape_html(title), css, hl_css, body_html)
 
 
 def _json(obj):

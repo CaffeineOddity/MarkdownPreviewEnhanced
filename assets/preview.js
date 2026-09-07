@@ -283,6 +283,85 @@
     });
   }
 
+  // ── code block copy button ───────────────────────────────────────────
+
+  function copyTextToClipboard(text, cb) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { cb(true); },
+        function () { cb(fallbackCopy(text)); });
+      return;
+    }
+    cb(fallbackCopy(text));
+  }
+
+  function fallbackCopy(text) {
+    // execCommand path for non-secure contexts (plain http://127.0.0.1 is
+    // secure enough for the async clipboard API, but keep a fallback anyway).
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function markCopied(btn) {
+    btn.classList.add("mdpp-copied");
+    btn.setAttribute("data-orig-text", btn.textContent);
+    btn.textContent = "✓";
+    setTimeout(function () {
+      btn.classList.remove("mdpp-copied");
+      var orig = btn.getAttribute("data-orig-text");
+      if (orig) btn.textContent = orig;
+    }, 1200);
+  }
+
+  function bindCopyCode() {
+    if (bindCopyCode._bound) return;
+    bindCopyCode._bound = true;
+    // Event delegation: survives SSE innerHTML replacement of .markdown-body.
+    document.addEventListener("click", function (ev) {
+      var btn = ev.target.closest ? ev.target.closest(".mdpp-code-copy") : null;
+      if (!btn) return;
+      var pre = btn.closest("pre");
+      if (!pre) return;
+      copyTextToClipboard(pre.textContent || "", function (ok) {
+        if (ok) markCopied(btn);
+        else btn.title = "Copy failed";
+      });
+    });
+  }
+
+  function decorateCodeCopyButtons() {
+    // Add a copy button to every plain code block. Runs after each content
+    // push (applyContent) and once at init for the server-rendered shell.
+    var content = $("mdpp-content");
+    if (!content) return;
+    var pres = content.querySelectorAll("pre");
+    for (var i = 0; i < pres.length; i++) {
+      var pre = pres[i];
+      // Skip mermaid/echarts blocks and anything already decorated.
+      if (pre.querySelector(".mdpp-code-copy")) continue;
+      if (pre.classList.contains("mermaid")) continue;
+      if (pre.closest(".mdpp-echarts-wrap")) continue;
+      if (pre.classList.contains("mdpp-echarts")) continue;
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "mdpp-code-copy";
+      btn.textContent = "Copy";
+      btn.setAttribute("aria-label", "Copy code");
+      pre.appendChild(btn);
+    }
+  }
+
   function applyContent(data) {
     var content = $("mdpp-content");
     if (content && typeof data.html === "string") {
@@ -295,6 +374,7 @@
     if (typeof window.mdppRenderEcharts === "function") window.mdppRenderEcharts();
     renderMermaid();
     bindTocClicks();
+    decorateCodeCopyButtons();
     tocActiveId = null;
     updateTocActive();
   }
@@ -1241,6 +1321,70 @@
     if (el) el.hidden = false;
   };
 
+  // ── copy as rich text ────────────────────────────────────────────────
+
+  function setCopyRichFeedback(btn, ok) {
+    btn.classList.add("mdpp-btn-loading");
+    btn.textContent = ok ? "✓" : "✗";
+    setTimeout(function () {
+      btn.classList.remove("mdpp-btn-loading");
+      btn.textContent = "📋";
+    }, 1200);
+  }
+
+  window.mdppCopyRich = function mdppCopyRich() {
+    var btn = $("mdpp-copy-rich");
+    var content = $("mdpp-content") || document.body;
+    var clone = content.cloneNode(true);
+    // 剪贴板里不要带复制按钮和代码块按钮
+    var junk = clone.querySelectorAll(".mdpp-code-copy, .mdpp-toc, script");
+    for (var i = 0; i < junk.length; i++) {
+      junk[i].parentNode.removeChild(junk[i]);
+    }
+    var html = clone.innerHTML;
+    var plain = clone.textContent || "";
+    var done = function (ok) {
+      if (btn) setCopyRichFeedback(btn, ok);
+      else if (!ok) alert("Copy failed. Please try the Export HTML button.");
+      console.log(ts() + " [MDPP] copy-rich ok=" + ok);
+    };
+    try {
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+        navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([plain], { type: "text/plain" }),
+          }),
+        ]).then(function () { done(true); }, function () { done(fallbackCopyRich(html)); });
+        return;
+      }
+    } catch (err) { /* fall through to execCommand */ }
+    done(fallbackCopyRich(html));
+  };
+
+  function fallbackCopyRich(html) {
+    // execCommand("copy") with text/html payload via a temporary selection.
+    try {
+      var container = document.createElement("div");
+      container.setAttribute("contenteditable", "true");
+      container.style.position = "fixed";
+      container.style.opacity = "0";
+      container.innerHTML = html;
+      document.body.appendChild(container);
+      var range = document.createRange();
+      range.selectNodeContents(container);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      var ok = document.execCommand("copy");
+      sel.removeAllRanges();
+      document.body.removeChild(container);
+      return ok;
+    } catch (err) {
+      return false;
+    }
+  }
+
   // ── presentation mode ─────────────────────────────────────────────────
 
   window.mdppOpenPresentation = function mdppOpenPresentation() {
@@ -1298,6 +1442,8 @@
     bindPreviewDocLinks();
     bindTocClicks();
     bindMermaidZoom();
+    bindCopyCode();
+    decorateCodeCopyButtons();
     updateTocActive();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("wheel", onUserScroll, { passive: true });

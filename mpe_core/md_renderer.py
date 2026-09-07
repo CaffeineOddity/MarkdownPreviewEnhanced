@@ -138,6 +138,7 @@ except Exception as _e:
     _IMPORT_TRACEBACK = _tb.format_exc()
     error("markdown import failed: %s" % _IMPORT_ERROR)
 
+from .emoji_map import EMOJI_ALIASES
 from .katex_renderer import render_tex_batch  # noqa: E402
 
 _ECHARTS_FENCE_RE = re.compile(
@@ -174,6 +175,14 @@ _CODE_MARKER_TMPL = "@@MDPPCODE%d@@"
 
 # YAML frontmatter at document start
 _FRONTMATTER_RE = re.compile(r"\A---[ \t]*\r?\n.*?\r?\n---[ \t]*\r?\n", re.DOTALL)
+
+# GFM emoji shortcode :alias: — alias chars and non-word delimiters both sides.
+# Word boundaries keep `foo:bar:`/`a:b` intact while matching prose and the
+# punctuation-delimited cases GitHub renders (start of line, "(:smile:)"...).
+_EMOJI_ALIAS_RE = r"[A-Za-z0-9_+-]+"
+_EMOJI_RE = re.compile(
+    r"(?<![A-Za-z0-9_+-]):(" + _EMOJI_ALIAS_RE + r"):(?![A-Za-z0-9_+-])"
+)
 
 # ATX headings for line mapping
 _ATX_HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$")
@@ -598,11 +607,40 @@ def _math_placeholder_html(tex, display, rendered=None):
     )
 
 
-def _extract_math(text):
+def _replace_emoji(text):
+    """Replace GFM emoji shortcodes (:smile:) with unicode characters.
+
+    Call with code fences/inline code already stashed (as in _extract_math) so
+    code content is never rewritten. Unknown aliases are left untouched.
+    """
+    def repl(m):
+        return EMOJI_ALIASES.get(m.group(1), m.group(0))
+
+    return _EMOJI_RE.sub(repl, text)
+
+
+def _protect_code_then(text, fn):
+    """Stash fenced/inline code, run *fn* on the text, restore the code."""
+    stash = []
+
+    def _stash(m):
+        stash.append(m.group(0))
+        return _CODE_MARKER_TMPL % (len(stash) - 1)
+
+    text = _FENCE_RE.sub(_stash, text)
+    text = _INLINE_CODE_RE.sub(_stash, text)
+    text = fn(text)
+    for i, block in enumerate(stash):
+        text = text.replace(_CODE_MARKER_TMPL % i, block)
+    return text
+
+
+def _extract_math(text, replace_emoji=False):
     """Pull LaTeX out of *text* so markdown cannot mangle delimiters.
 
     Returns (text_with_markers, list_of_html_fragments).
-    Code fences and inline code are temporarily protected first.
+    Code fences and inline code are temporarily protected first; emoji
+    replacement runs on the same stash so shortcodes inside code survive.
     """
     code_stash = []
     # (tex, display) pending server-side render
@@ -641,6 +679,9 @@ def _extract_math(text):
     text = _MATH_DISPLAY_BRACKET_RE.sub(_disp_bracket, text)
     text = _MATH_INLINE_PAREN_RE.sub(_inl_paren, text)
     text = _MATH_INLINE_DOLLAR_RE.sub(_inl_dollar, text)
+
+    if replace_emoji:
+        text = _replace_emoji(text)
 
     # Restore code so markdown can process it normally
     for i, block in enumerate(code_stash):
@@ -690,6 +731,7 @@ def render(
     enable_toc=True,
     strip_yaml=True,
     enable_math=True,
+    enable_emoji=True,
 ):
     """Render markdown text to HTML.
 
@@ -753,12 +795,16 @@ def render(
 
     text = _MERMAID_FENCE_RE.sub(_stash, text)
 
-    # Math extraction (must be after mermaid, before markdown convert)
+    # Math extraction (must be after mermaid, before markdown convert).
+    # Emoji shortcodes ride the same stash pass so code content is protected.
     math_html = []
     if enable_math:
-        text, math_html = _extract_math(text)
-        if math_html:
-            debug("protected %d math region(s)" % len(math_html))
+        text, math_html = _extract_math(text, replace_emoji=enable_emoji)
+    elif enable_emoji:
+        # No math: still protect code fences before substituting.
+        text = _protect_code_then(text, _replace_emoji)
+    if math_html:
+        debug("protected %d math region(s)" % len(math_html))
 
     # Pass extension *instances* (not string names like
     # "markdown.extensions.fenced_code") so python-markdown does not need to
