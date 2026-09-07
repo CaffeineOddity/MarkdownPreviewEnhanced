@@ -19,7 +19,8 @@ Browser live Markdown preview for Sublime Text 4. No extra installs.
 | ✅ Presentation mode (16:9 slides) | ✅ KaTeX (`$…$` / `$$…$$`) |
 | ✅ Dark mode (follows system, persisted) | ✅ Mermaid diagrams (click to zoom) |
 | ✅ Copy as rich text (📋 / command) | ✅ ECharts |
-| ✅ Code block copy button | ✅ No extra installs |
+| ✅ Paste as markdown (⇧⌘V / right-click) | ✅ No extra installs |
+| ✅ Code block copy button | |
 | ✅ Relative images (`./img/a.png`) | |
 | ✅ Export HTML / PNG / PDF | |
 | ✅ Custom CSS & favicon | |
@@ -35,7 +36,11 @@ Or clone this repo to `Packages/MarkdownPreviewEnhanced/` (repo root = package r
 
 Open a `.md` file, then press `Cmd+Shift+M` (Windows / Linux: `Ctrl+Shift+M`) to open / focus the preview.
 
-This is the only default key binding (issue #6 — don't shadow common shortcuts). Close, Refresh, Presentation Mode, Export HTML and Export PDF are available from the Command Palette; add your own bindings in `User/Default (OSX).sublime-keymap` if wanted.
+This is the only other default key binding (issue #6 - don't shadow common shortcuts). Close, Refresh, Presentation Mode, Export HTML and Export PDF are available from the Command Palette; add your own bindings in `User/Default (OSX).sublime-keymap` if wanted.
+
+### Paste as markdown
+
+Copy content from a web page, then in a `.md` file press `Cmd+Shift+V` (Windows / Linux: `Ctrl+Shift+V`) or right-click -> **Paste as Markdown**. The clipboard HTML is converted to markdown (headings, bold/italic, links, lists, code blocks, GFM tables) and inserted at the cursor. If the clipboard has no HTML (e.g. plain text copied from a terminal), it falls back to a normal paste. On Linux the command needs `xclip` or `wl-clipboard`. Set `paste_download_images` to `true` to download remote images locally into `media/` (off by default).
 
 Edit the file — the browser updates in place (SSE), scroll is kept. Press the shortcut again to focus the existing tab (does not stack another tab). Switching a preview tab in the browser focuses the matching Sublime view, and the other way around.
 
@@ -71,6 +76,8 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | `enable_footnotes` | `true` | `[^1]` |
 | `strip_frontmatter` | `true` | Strip leading `---` YAML |
 | `scroll_sync` | `true` | Editor ↔ preview (needs local server) |
+| `paste_download_images` | `false` | Paste as markdown: download remote images to `media/` |
+| `paste_images_dir` | `"media"` | Subdirectory for downloaded images (relative to md file) |
 | `custom_css` | `""` | Extra CSS file path (`~` ok) |
 | `favicon` | `""` | Empty = bundled icon; `"none"` = no icon; otherwise a local path or `http(s)` URL |
 

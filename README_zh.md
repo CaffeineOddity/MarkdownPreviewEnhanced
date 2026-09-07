@@ -19,7 +19,8 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 | ✅ 演示模式（16:9 幻灯片） | ✅ KaTeX（`$…$` / `$$…$$`） |
 | ✅ 暗色模式（跟随系统，可记住） | ✅ Mermaid 图（点击放大） |
 | ✅ 复制为富文本（📋 / 命令） | ✅ ECharts |
-| ✅ 代码块复制按钮 | ✅ 零额外依赖 |
+| ✅ 粘贴为 markdown（⇧⌘V / 右键） | ✅ 零额外依赖 |
+| ✅ 代码块复制按钮 | |
 | ✅ 相对路径图片（`./img/a.png`） | |
 | ✅ 导出 HTML / PNG / PDF | |
 | ✅ 自定义 CSS 和 favicon | |
@@ -35,7 +36,11 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 
 打开 `.md` 文件后按 `Cmd+Shift+M`（Windows / Linux：`Ctrl+Shift+M`）打开 / 聚焦预览。
 
-这是唯一的默认快捷键（issue #6 —— 不覆盖系统常用快捷键）。关闭、刷新、演示模式、导出 HTML / PDF 都在命令面板里；需要快捷键可在 `User/Default (OSX).sublime-keymap` 自行绑定。
+这是唯一的另一个默认快捷键（issue #6 -- 不覆盖系统常用快捷键）。关闭、刷新、演示模式、导出 HTML / PDF 都在命令面板里；需要快捷键可在 `User/Default (OSX).sublime-keymap` 自行绑定。
+
+### 粘贴为 markdown
+
+从网页复制内容后，在 `.md` 文件里按 `Cmd+Shift+V`（Windows / Linux：`Ctrl+Shift+V`）或右键 -> **Paste as Markdown**。剪贴板的 HTML 会被转为 markdown（标题、粗体斜体、链接、列表、代码块、GFM 表格）并插入光标处。如果剪贴板没有 HTML（比如从终端复制的纯文本），会自动降级为普通粘贴。Linux 上需要 `xclip` 或 `wl-clipboard`。设置 `paste_download_images` 为 `true` 可把远程图片下载到 `media/`（默认关闭）。
 
 编辑时浏览器原地更新（SSE），滚动位置保留。再按一次快捷键会聚焦已有标签，不会再叠一张。浏览器里切预览 tab，Sublime 会切到对应 view，反过来也一样。
 
@@ -71,6 +76,8 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | `enable_footnotes` | `true` | `[^1]` |
 | `strip_frontmatter` | `true` | 去掉文首 YAML `---` |
 | `scroll_sync` | `true` | 编辑器 ↔ 预览（需要本地服务器） |
+| `paste_download_images` | `false` | 粘贴为 markdown：把远程图片下载到 `media/` |
+| `paste_images_dir` | `"media"` | 下载图片子目录（相对 md 文件） |
 | `custom_css` | `""` | 额外 CSS 路径（可用 `~`） |
 | `favicon` | `""` | 空 = 包内默认图标；`"none"` = 不要图标；否则填本地路径或 `http(s)` URL |
 

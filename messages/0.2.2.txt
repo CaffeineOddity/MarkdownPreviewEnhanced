@@ -1,0 +1,11 @@
+MarkdownPreviewEnhanced 0.2.2
+=============================
+
+- feat: paste clipboard HTML as markdown (Cmd+Shift+V / Ctrl+Shift+V, or right-click)
+  - reads text/html from the system clipboard (macOS / Windows / Linux)
+  - converts to markdown: headings, bold/italic, links, lists, code blocks, GFM tables
+  - falls back to plain paste when the clipboard has no HTML
+  - optional image localization (paste_download_images, off by default)
+  - HTML->markdown converter vendored (markdownify + beautifulsoup4 + soupsieve, all MIT)
+- feat: right-click context menu entry for paste as markdown
+- docs: README and README_zh updated with paste-as-markdown feature and settings
