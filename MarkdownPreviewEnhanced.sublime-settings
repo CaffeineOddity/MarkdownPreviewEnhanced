@@ -46,6 +46,13 @@
     // Bidirectional scroll sync (requires use_local_server).
     "scroll_sync": true,
 
+    // "Paste as Markdown": download http(s) images in the pasted content to
+    // a local folder and rewrite the links (default false).
+    "paste_download_images": false,
+
+    // Folder name (relative to the md file) for downloaded pasted images.
+    "paste_images_dir": "media",
+
     // Optional extra CSS file path (absolute or ~).
     "custom_css": "",
 

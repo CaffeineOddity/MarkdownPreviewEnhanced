@@ -20,6 +20,10 @@
         "command": "markdown_preview_enhanced_copy_rich_text"
     },
     {
+        "caption": "MarkdownPreviewEnhanced: Paste as Markdown",
+        "command": "markdown_preview_enhanced_paste_as_markdown"
+    },
+    {
         "caption": "MarkdownPreviewEnhanced: Export HTML…",
         "command": "markdown_preview_enhanced_export_html"
     },

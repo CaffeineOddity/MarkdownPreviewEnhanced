@@ -5,4 +5,7 @@
     // 其余命令(close/export/presentation/refresh)见命令面板,
     // 需要快捷键可在 User/Default (OSX).sublime-keymap 自行绑定。
     { "keys": ["super+shift+m"], "command": "markdown_preview_enhanced_toggle" },
+
+    // 粘贴剪贴板 HTML 为 markdown（对齐 MarkdownWriter 的 Ctrl+Alt+V 习惯）。
+    { "keys": ["super+shift+v"], "command": "markdown_preview_enhanced_paste_as_markdown" },
 ]
