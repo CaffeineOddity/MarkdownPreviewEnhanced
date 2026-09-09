@@ -60,6 +60,11 @@
     // otherwise a local path (~ expanded) or http(s) URL.
     "favicon": "",
 
+    // Export HTML/PDF: embed local images as base64 data URIs so the output
+    // is fully self-contained (portable to other machines). false keeps
+    // file:// paths. Remote http(s) images are never downloaded.
+    "embed_images": true,
+
     // Verbose plugin logs. Omit or false on Package Control installs (quiet).
     // Local git builds default verbose unless this is false. Set true on a
     // release install to debug.

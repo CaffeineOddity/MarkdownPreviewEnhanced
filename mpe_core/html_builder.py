@@ -3,9 +3,73 @@
 KaTeX and Mermaid are always served from vendored package assets — never from a CDN.
 """
 import base64
+import mimetypes
 import os
+import re
+from urllib.parse import unquote as _unquote
 
 from . import assets as pkg_assets
+
+_IMG_SRC_RE = re.compile(r'(<img\b[^>]*?\bsrc=["\'])([^"\']+)(["\'])', re.IGNORECASE)
+
+# data URI 前缀长度上限：超过则视为异常超大文件，跳过内嵌
+_MAX_EMBED_BYTES = 20 * 1024 * 1024
+
+
+def _image_mime(path):
+    """按扩展名推断图片 MIME;未知类型回落通用二进制."""
+    mime, _ = mimetypes.guess_type(path)
+    return mime or "application/octet-stream"
+
+
+def _read_local_image(src):
+    """把 file:// 图片 src 解析为绝对路径并读出字节;不可读返回 None."""
+    path = _unquote(src)
+    if path.startswith("file://"):
+        path = path[len("file://"):]
+        # file://localhost/... 形式去掉 host 段
+        if path.startswith("localhost/"):
+            path = path[len("localhost"):]
+    if not os.path.isabs(path) or not os.path.isfile(path):
+        return None
+    try:
+        size = os.path.getsize(path)
+        if size <= 0 or size > _MAX_EMBED_BYTES:
+            return None
+        with open(path, "rb") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def embed_local_images(body_html):
+    """把 body 中的本地图片 (file://) 内嵌为 data: base64 URI.
+
+    供导出链路使用：远程 http(s)、已是 data: 的 src 原样保留;
+    读不到的 file:// src 也原样保留(由调用方决定是否告警)。
+    返回 (new_html, embedded_count, failed_srcs)。
+    """
+    embedded = 0
+    failed = []
+
+    def repl(m):
+        nonlocal embedded
+        prefix, src, suffix = m.group(1), m.group(2), m.group(3)
+        if not src.lower().startswith("file://"):
+            return m.group(0)
+        raw = _read_local_image(src)
+        if raw is None:
+            failed.append(src)
+            return m.group(0)
+        data = "data:%s;base64,%s" % (
+            _image_mime(_unquote(src)),
+            base64.b64encode(raw).decode("ascii"),
+        )
+        embedded += 1
+        return "%s%s%s" % (prefix, data, suffix)
+
+    return _IMG_SRC_RE.sub(repl, body_html), embedded, failed
+
 
 _ICON_MIME = {
     ".svg": "image/svg+xml",
@@ -422,8 +486,18 @@ def build_export_html(
     custom_css="",
     title="Markdown Export",
     favicon="",
+    embed_images=True,
+    embed_warnings=None,
 ):
-    """Standalone HTML. KaTeX CSS is inlined from vendored assets (no CDN)."""
+    """Standalone HTML. KaTeX CSS is inlined from vendored assets (no CDN).
+
+    embed_images=True 时本地 file:// 图片内嵌为 data: base64 URI;
+    读取失败的 src 原样保留并追加到 embed_warnings(若提供)。
+    """
+    if embed_images:
+        body_html, _n, failed = embed_local_images(body_html)
+        if failed and embed_warnings is not None:
+            embed_warnings.extend(failed)
     css = _load_asset("preview.css")
     hl_css = _load_asset("highlight.css")
     if custom_css:

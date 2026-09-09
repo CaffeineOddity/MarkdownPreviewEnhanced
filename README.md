@@ -79,6 +79,7 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | `paste_download_images` | `false` | Paste as markdown: download remote images to `media/` |
 | `paste_images_dir` | `"media"` | Subdirectory for downloaded images (relative to md file) |
 | `custom_css` | `""` | Extra CSS file path (`~` ok) |
+| `embed_images` | `true` | Export HTML/PDF: embed local images as base64 so output is fully portable |
 | `favicon` | `""` | Empty = bundled icon; `"none"` = no icon; otherwise a local path or `http(s)` URL |
 
 Per-view override:

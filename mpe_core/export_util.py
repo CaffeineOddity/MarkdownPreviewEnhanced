@@ -9,7 +9,7 @@ from .md_renderer import render as render_markdown, rewrite_image_srcs
 
 
 def _render_standalone(text, base_dir, mermaid_theme, show_toc, enable_katex,
-                       custom_css, title, log, favicon):
+                       custom_css, title, log, favicon, embed_images=True):
     """Shared helper: render markdown and build standalone export HTML."""
     result = render_markdown(
         text,
@@ -22,6 +22,7 @@ def _render_standalone(text, base_dir, mermaid_theme, show_toc, enable_katex,
     toc = result["toc_html"] if show_toc else ""
     if base_dir:
         body = rewrite_image_srcs(body, base_dir, mode="file")
+    warnings = []
     html = build_export_html(
         body,
         toc_html=toc,
@@ -30,7 +31,11 @@ def _render_standalone(text, base_dir, mermaid_theme, show_toc, enable_katex,
         custom_css=custom_css,
         title=title,
         favicon=favicon,
+        embed_images=embed_images,
+        embed_warnings=warnings,
     )
+    for src in warnings:
+        log("image not embedded (unreadable): %s" % src)
     return html, result.get("errors") or []
 
 
@@ -45,11 +50,12 @@ def export_html(
     title="Markdown Export",
     log=None,
     favicon="",
+    embed_images=True,
 ):
     log = log or (lambda m: None)
     html, errors = _render_standalone(
         text, base_dir, mermaid_theme, show_toc, enable_katex,
-        custom_css, title, log, favicon,
+        custom_css, title, log, favicon, embed_images=embed_images,
     )
     dest_path = os.path.expanduser(dest_path)
     os.makedirs(os.path.dirname(dest_path) or ".", exist_ok=True)
@@ -80,9 +86,10 @@ def export_pdf(
             "Install Chrome or export HTML and print manually."
         )
 
+    # PDF 渲染同样内嵌图片：headless Chrome 不依赖源目录即可取到图片
     html, _errors = _render_standalone(
         text, base_dir, mermaid_theme, show_toc, enable_katex,
-        custom_css, title, log, favicon,
+        custom_css, title, log, favicon, embed_images=True,
     )
 
     fd, tmp_html = tempfile.mkstemp(suffix=".html", prefix="mdpp_export_")
@@ -144,7 +151,7 @@ def export_png(
 
     html, _errors = _render_standalone(
         text, base_dir, mermaid_theme, show_toc, enable_katex,
-        custom_css, title, log, favicon,
+        custom_css, title, log, favicon, embed_images=True,
     )
 
     fd, tmp_html = tempfile.mkstemp(suffix=".html", prefix="mdpp_export_")

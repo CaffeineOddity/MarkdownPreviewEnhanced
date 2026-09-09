@@ -79,6 +79,7 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | `paste_download_images` | `false` | 粘贴为 markdown：把远程图片下载到 `media/` |
 | `paste_images_dir` | `"media"` | 下载图片子目录（相对 md 文件） |
 | `custom_css` | `""` | 额外 CSS 路径（可用 `~`） |
+| `embed_images` | `true` | 导出 HTML/PDF：本地图内嵌 base64，产物单文件可移植 |
 | `favicon` | `""` | 空 = 包内默认图标；`"none"` = 不要图标；否则填本地路径或 `http(s)` URL |
 
 单视图覆盖：

@@ -39,6 +39,7 @@ class MarkdownPreviewEnhancedExportHtmlCommand(sublime_plugin.WindowCommand):
                     title=view_title(view),
                     log=log.debug,
                     favicon=config.get("favicon", "") or "",
+                    embed_images=bool(config.get("embed_images", True)),
                 )
                 msg = "Exported HTML: %s" % dest
                 if errors:
