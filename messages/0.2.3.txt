@@ -1,0 +1,4 @@
+MarkdownPreviewEnhanced 0.2.3
+=============================
+
+- feat(export): embed local images as base64 in HTML/PDF export
