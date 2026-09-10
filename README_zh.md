@@ -19,11 +19,11 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 | ✅ 演示模式（16:9 幻灯片） | ✅ KaTeX（`$…$` / `$$…$$`） |
 | ✅ 暗色模式（跟随系统，可记住） | ✅ Mermaid 图（点击放大） |
 | ✅ 复制为富文本（📋 / 命令） | ✅ ECharts |
-| ✅ 粘贴为 markdown（⇧⌘V / 右键） | ✅ 零额外依赖 |
-| ✅ 代码块复制按钮 | |
-| ✅ 相对路径图片（`./img/a.png`） | |
-| ✅ 导出 HTML / PNG / PDF | |
-| ✅ 自定义 CSS 和 favicon | |
+| ✅ 粘贴为 markdown（⇧⌘V / 右键） | ✅ Callout 提示块（`> [!NOTE]`） |
+| ✅ 代码块复制按钮 | ✅ `~~删除~~` `==高亮==` `^上标^` `~下标~` |
+| ✅ 相对路径图片（`./img/a.png`） | ✅ 任务列表 checkbox 预览点击回写 |
+| ✅ 导出 HTML / PNG / PDF | ✅ 图片点击放大 |
+| ✅ 自定义 CSS 和 favicon | ✅ 零额外依赖 |
 | ✅ macOS / Windows / Linux | |
 
 ## 安装
@@ -51,6 +51,8 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 鼠标悬停预览里的代码块会出现 **Copy** 按钮，一键复制代码原文。**复制为富文本**把渲染后的 HTML 放进剪贴板（浏览器按钮，或命令面板里的 **MarkdownPreviewEnhanced: Copy as Rich Text**），可直接粘贴进邮件、Word、Confluence 并保留样式。Linux 上编辑器命令需要 `xclip` 或 `wl-copy`；浏览器按钮不受此限制。
 
 暗色模式默认跟随系统，点过一次后记在浏览器里。暗色下 Mermaid 用暗色主题。点击 Mermaid 图进入放大（拖动平移、滚轮缩放、`Esc` 关闭）。在 Sublime 里点某一行，预览会把对应块滚到窗口中间（Mermaid 围栏里的行也会对上图里的位置）。
+
+预览里的普通图片点击也可进入同样的放大层。GFM 任务列表的 checkbox 可以直接点击：勾选状态会回写源文件（`- [ ]` / `- [x]`，本地服务器模式）。GitHub 风格 callout（`> [!NOTE]` / `TIP` / `IMPORTANT` / `WARNING` / `CAUTION`，类型后可跟自定义标题）、删除线 `~~文本~~`、高亮 `==文本==`、上标 `^文本^`、下标 `~文本~` 在预览与导出中均可渲染。
 
 ### 演示模式
 

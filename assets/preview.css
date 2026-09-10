@@ -364,6 +364,11 @@ body {
   accent-color: var(--mdpp-accent);
 }
 
+/* checkbox 可点击回写编辑器（server 模式）；file/export 模式 JS 不上报 */
+#mdpp-content .markdown-body .task-list-item-checkbox {
+  cursor: pointer;
+}
+
 /* ── code ─────────────────────────────────────────────────────────────── */
 .markdown-body code {
   font-family: var(--mdpp-mono);
@@ -474,6 +479,81 @@ html[data-mdpp-theme="dark"] .mdpp-code-copy.mdpp-copied {
   margin-bottom: 0.2em;
 }
 
+/* ── GFM callout（> [!NOTE] 等）────────────────────────────────────── */
+/* 色板取 GitHub Primer；暗色在 html[data-mdpp-theme="dark"] 下覆写变量。 */
+.markdown-body .mdpp-callout {
+  --mdpp-callout-fg: #0969da;
+  --mdpp-callout-bg: #ddf4ff;
+  --mdpp-callout-border: #0969da;
+  padding: 0.6em 1em;
+  color: var(--mdpp-fg);
+  border-left: 0.28em solid var(--mdpp-callout-border);
+  background: var(--mdpp-callout-bg);
+}
+.markdown-body .mdpp-callout-tip {
+  --mdpp-callout-fg: #1a7f37;
+  --mdpp-callout-bg: #dafbe1;
+  --mdpp-callout-border: #1a7f37;
+}
+.markdown-body .mdpp-callout-important {
+  --mdpp-callout-fg: #8250df;
+  --mdpp-callout-bg: #fbefff;
+  --mdpp-callout-border: #8250df;
+}
+.markdown-body .mdpp-callout-warning {
+  --mdpp-callout-fg: #9a6700;
+  --mdpp-callout-bg: #fff8c5;
+  --mdpp-callout-border: #9a6700;
+}
+.markdown-body .mdpp-callout-caution {
+  --mdpp-callout-fg: #cf222e;
+  --mdpp-callout-bg: #ffebe9;
+  --mdpp-callout-border: #cf222e;
+}
+.markdown-body .mdpp-callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  margin: 0 0 0.35em;
+  font-weight: 600;
+  color: var(--mdpp-callout-fg);
+}
+.markdown-body .mdpp-callout-icon {
+  flex: none;
+}
+/* 标题 p 后若紧跟内容 p，取消默认 margin 叠加 */
+.markdown-body .mdpp-callout-title + p,
+.markdown-body .mdpp-callout-title + ul,
+.markdown-body .mdpp-callout-title + ol {
+  margin-top: 0;
+}
+
+html[data-mdpp-theme="dark"] .markdown-body .mdpp-callout-note {
+  --mdpp-callout-fg: #4493f8;
+  --mdpp-callout-bg: #121d2f;
+  --mdpp-callout-border: #4493f8;
+}
+html[data-mdpp-theme="dark"] .markdown-body .mdpp-callout-tip {
+  --mdpp-callout-fg: #3fb950;
+  --mdpp-callout-bg: #0f2417;
+  --mdpp-callout-border: #3fb950;
+}
+html[data-mdpp-theme="dark"] .markdown-body .mdpp-callout-important {
+  --mdpp-callout-fg: #ab7df8;
+  --mdpp-callout-bg: #20172f;
+  --mdpp-callout-border: #ab7df8;
+}
+html[data-mdpp-theme="dark"] .markdown-body .mdpp-callout-warning {
+  --mdpp-callout-fg: #d29922;
+  --mdpp-callout-bg: #241c10;
+  --mdpp-callout-border: #d29922;
+}
+html[data-mdpp-theme="dark"] .markdown-body .mdpp-callout-caution {
+  --mdpp-callout-fg: #f85149;
+  --mdpp-callout-bg: #25171c;
+  --mdpp-callout-border: #f85149;
+}
+
 .markdown-body hr {
   height: 1px;
   padding: 0;
@@ -489,6 +569,17 @@ html[data-mdpp-theme="dark"] .mdpp-code-copy.mdpp-copied {
   border-radius: 6px;
   border: 1px solid var(--mdpp-border-muted);
   box-shadow: var(--mdpp-shadow);
+}
+
+/* 预览正文图片可点击放大（链接内与图标级小图由 JS 排除） */
+#mdpp-content .markdown-body img {
+  cursor: zoom-in;
+}
+/* zoom overlay 内是位图 clone：禁止阴影/边框干扰观看 */
+.mdpp-mermaid-zoom-mover img {
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
 }
 
 /* ── tables ───────────────────────────────────────────────────────────── */
@@ -581,6 +672,28 @@ html[data-mdpp-theme="dark"] .markdown-body pre.mermaid svg {
   position: relative;
   vertical-align: baseline;
   top: -0.4em;
+}
+
+/* ── del / mark / sub（内联扩展语法；del/sup 用浏览器默认，仅补 mark）── */
+.markdown-body mark {
+  padding: 0.1em 0.2em;
+  margin: 0 -0.05em;
+  border-radius: 3px;
+  background: #fff8c5;
+  color: inherit;
+}
+
+html[data-mdpp-theme="dark"] .markdown-body mark {
+  background: #bb8009;
+  color: #0d1117;
+}
+
+.markdown-body sub {
+  font-size: 0.75em;
+  line-height: 0;
+  vertical-align: baseline;
+  position: relative;
+  bottom: -0.25em;
 }
 
 .markdown-body .footnote-ref {

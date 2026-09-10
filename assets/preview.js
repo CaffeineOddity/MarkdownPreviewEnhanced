@@ -283,6 +283,104 @@
     });
   }
 
+  // ── image click zoom（复用 mermaid zoom overlay 基础设施）────────────
+
+  function openImageZoom(img) {
+    var el = mermaidZoomRoot();
+    var mover = el.querySelector(".mdpp-mermaid-zoom-mover");
+    mover.innerHTML = "";
+    var clone = img.cloneNode(true);
+    clone.style.maxWidth = "none";
+    clone.style.maxHeight = "none";
+    // 以自然尺寸为 100% 基准；初始按视口 70% 宽等比适配
+    var natural = img.naturalWidth
+      || img.getBoundingClientRect().width || 800;
+    var w = Math.min(Math.max(natural, 200), Math.floor(window.innerWidth * 0.7));
+    _mermaidZoomBaseW = w;
+    _mermaidZoomScale = 1;
+    _mermaidZoomX = 0;
+    _mermaidZoomY = 0;
+    mover.appendChild(clone);
+    applyImageZoomTransform();
+    el.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+
+  function applyImageZoomTransform() {
+    var mover = mermaidZoomMover();
+    var root = $("mdpp-mermaid-zoom");
+    if (!mover || !root) return;
+    var inner = mover.querySelector("img");
+    if (!inner) return;
+    inner.style.width = Math.max(40, _mermaidZoomBaseW * _mermaidZoomScale) + "px";
+    inner.style.height = "auto";
+    mover.style.transform = "translate(-50%, -50%) translate("
+      + _mermaidZoomX + "px," + _mermaidZoomY + "px)";
+  }
+
+  function bindImageZoom() {
+    if (bindImageZoom._bound) return;
+    bindImageZoom._bound = true;
+    document.addEventListener("click", function (ev) {
+      var zoom = $("mdpp-mermaid-zoom");
+      if (zoom && !zoom.hidden) return; // overlay 打开时不重复触发
+      var content = $("mdpp-content");
+      if (!content) return;
+      var img = ev.target.closest ? ev.target.closest("img") : null;
+      if (!img || !content.contains(img)) return;
+      // 链接内的图片点击应走链接；图标级小图不放大
+      if (ev.target.closest("a")) return;
+      if (img.naturalWidth && img.naturalWidth < 32 && img.naturalHeight < 32) return;
+      // loading=lazy 尚未加载完成时 naturalWidth 为 0，跳过
+      if (!img.complete) return;
+      ev.preventDefault();
+      openImageZoom(img);
+    });
+    // overlay 打开的是 img 时用位图缩放（可能糊，但与图片放大语义一致）
+    document.addEventListener("wheel", function (ev) {
+      var zoom = $("mdpp-mermaid-zoom");
+      if (!zoom || zoom.hidden) return;
+      if (!zoom.querySelector(".mdpp-mermaid-zoom-mover img")) return;
+      ev.preventDefault();
+      var dy = ev.deltaY;
+      if (ev.deltaMode === 1) dy *= 16;
+      if (ev.deltaMode === 2) dy *= 80;
+      _mermaidZoomScale = Math.min(6, Math.max(0.4,
+        _mermaidZoomScale * Math.exp(-dy * 0.0009)));
+      applyImageZoomTransform();
+    }, { passive: false });
+  }
+
+  // ── task list checkbox 回写（server 模式；见 specs/task-list-checkbox-sync.md）
+
+  function bindTaskToggle() {
+    if (bindTaskToggle._bound) return;
+    bindTaskToggle._bound = true;
+    document.addEventListener("click", function (ev) {
+      if (cfg.mode !== "server") return;
+      var box = ev.target;
+      if (!box || !box.classList
+          || !box.classList.contains("task-list-item-checkbox")) return;
+      var li = box.closest ? box.closest("li[data-line]") : null;
+      if (!li) return;
+      var line = parseInt(li.getAttribute("data-line"), 10);
+      if (!line) return;
+      var payload = {
+        file: channelFile,
+        line: line,
+        checked: box.checked,
+      };
+      // 立即上报；ST 回写后 debounce 重渲染会推送新 HTML，状态随之收敛
+      fetch("/api/task_toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(function (err) {
+        console.warn(ts() + " [MDPP] task_toggle failed", err);
+      });
+    });
+  }
+
   // ── code block copy button ───────────────────────────────────────────
 
   function copyTextToClipboard(text, cb) {
@@ -1442,6 +1540,8 @@
     bindPreviewDocLinks();
     bindTocClicks();
     bindMermaidZoom();
+    bindImageZoom();
+    bindTaskToggle();
     bindCopyCode();
     decorateCodeCopyButtons();
     updateTocActive();
@@ -1455,6 +1555,8 @@
         window.mdppCloseSponsor();
       }
     });
+    // mermaid zoom overlay 的拖拽平移逻辑对 mover 内的 img 同样适用；
+    // Esc/×/backdrop 关闭走 closeMermaidZoom，无需单独分支。
 
     if (cfg.mode === "server") {
       // 本页 GET /?file= 已经 queue 过 ST,启动时的 focus 不再打 open_doc。

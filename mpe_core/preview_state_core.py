@@ -63,6 +63,7 @@ class DocChannel:
         self.export_base_dir = None
         self.export_settings = {}
         self.sse_queues = []       # list of queue.Queue
+        self.pending_task_toggles = []  # 浏览器 checkbox 点击 -> ST 回写队列
 
     def _notify_sse(self, event_type, payload_json):
         """Push an SSE event to this channel and to the origin-wide stream."""
@@ -358,6 +359,25 @@ def pop_open_docs():
         docs = list(_STATE.pending_open_docs)
         _STATE.pending_open_docs = []
         return docs
+
+
+def queue_task_toggle(file_path, line, checked):
+    """Queue a preview checkbox click for the ST-side poller to apply."""
+    with _STATE.lock:
+        ch = _STATE.channel(file_path)
+        ch.pending_task_toggles.append(
+            {"line": int(line), "checked": bool(checked)})
+
+
+def pop_task_toggles():
+    """Return [(file_path, line, checked)] and clear all queued toggles."""
+    with _STATE.lock:
+        events = []
+        for key, ch in _STATE.channels.items():
+            while ch.pending_task_toggles:
+                item = ch.pending_task_toggles.pop(0)
+                events.append((key, item["line"], item["checked"]))
+        return events
 
 
 def has_active_sse_connection():

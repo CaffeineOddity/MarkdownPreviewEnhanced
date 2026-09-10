@@ -4,7 +4,7 @@ HTTP/SSE stay up while ``tab_manager`` has any session row (pending register
 or live tab).  They stop after the last tab closes (STOP_GRACE covers F5)
 or when live tabs exist but SSE is gone for CRASH_IDLE (browser crash).
 """
-import os
+import re
 import threading
 import time
 
@@ -17,6 +17,7 @@ from .preview_server import (
     SERVER,
     pop_open_docs,
     pop_browser_lines,
+    pop_task_toggles,
     has_active_sse_connection,
     set_editor_line,
     set_output_dir,
@@ -231,6 +232,62 @@ def _scroll_editor_to_line(line, view_id):
         log.debug("scroll editor failed: %s" % e)
 
 
+# ── browser → ST checkbox 回写 ───────────────────────────────────────────────
+
+# 任务项列表标记：`- [ ]` / `* [x]` / `1. [X]`（捕获 [ 前缀、标记字符、] 后缀）。
+# 要求 ] 后是空白或行尾（`[ ]nospace` 不算任务标记，与 GFM 一致）；
+# 尾部的空白只做 look-ahead 消费，不并入替换范围。
+_TASK_ITEM_RE = re.compile(r"^(\s*(?:[-*+]|\d+\.)\s+\[)([ xX])(\])(?=\s|$)")
+
+
+def _task_toggle_new_text(line_text, checked):
+    """返回把 *line_text* 的任务标记改成 *checked* 状态后的新行文本。
+
+    行不是任务项时返回 None（调用方跳过，不动文件）。
+    """
+    m = _TASK_ITEM_RE.match(line_text)
+    if not m:
+        return None
+    mark = "x" if checked else " "
+    return m.group(1) + mark + m.group(3) + line_text[m.end():]
+
+
+def _apply_task_toggle_edit(view, line, checked):
+    """把 *view* 中 1-based *line* 行的任务标记替换为 *checked* 状态。
+
+    行内容不再是任务项（文件已改、行号漂移）时静默跳过。
+    """
+    if view is None or line < 1:
+        return
+    try:
+        line_pt = view.text_point(line - 1, 0)
+        line_region = view.line(line_pt)
+        line_text = view.substr(line_region)
+        new_text = _task_toggle_new_text(line_text, checked)
+        if new_text is None or new_text == line_text:
+            log.debug("task_toggle skipped line=%d (not a task item)" % line)
+            return
+        # 只替换 [ ] / [x] 的标记字符，保留行内其余内容
+        m = _TASK_ITEM_RE.match(line_text)
+        mark_start = line_region.begin() + m.start(2)
+        mark_end = line_region.begin() + m.end(2)
+        view.replace(
+            sublime.Region(mark_start, mark_end), "x" if checked else " ")
+    except Exception as e:
+        log.debug("task_toggle edit failed line=%d: %s" % (line, e))
+
+
+def _find_markdown_view(view_id):
+    """按 view_id 精确查找视图，找不到退回第一个 markdown 视图。"""
+    for w in sublime.windows():
+        for v in w.views():
+            if view_id and v.id() == view_id:
+                return v
+            if view_id is None and v.match_selector(0, _MARKDOWN_SCOPE):
+                return v
+    return None
+
+
 # ── background poller ───────────────────────────────────────────────────────
 
 def start_scroll_poller():
@@ -310,6 +367,18 @@ def start_scroll_poller():
                 sublime.set_timeout(
                     lambda: [open_doc_from_browser(p, focus_browser=fb)
                              for p, fb in items], 0
+                )
+        except Exception:
+            pass
+
+        try:
+            toggles = pop_task_toggles()
+            for file_key, line, checked in toggles:
+                view_id = tab_manager.get_view_id_for_file(file_key)
+                sublime.set_timeout(
+                    lambda vl=view_id, l=line, c=checked: (
+                        _apply_task_toggle_edit(
+                            _find_markdown_view(vl), l, c)), 0
                 )
         except Exception:
             pass

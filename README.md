@@ -19,11 +19,11 @@ Browser live Markdown preview for Sublime Text 4. No extra installs.
 | ✅ Presentation mode (16:9 slides) | ✅ KaTeX (`$…$` / `$$…$$`) |
 | ✅ Dark mode (follows system, persisted) | ✅ Mermaid diagrams (click to zoom) |
 | ✅ Copy as rich text (📋 / command) | ✅ ECharts |
-| ✅ Paste as markdown (⇧⌘V / right-click) | ✅ No extra installs |
-| ✅ Code block copy button | |
-| ✅ Relative images (`./img/a.png`) | |
-| ✅ Export HTML / PNG / PDF | |
-| ✅ Custom CSS & favicon | |
+| ✅ Paste as markdown (⇧⌘V / right-click) | ✅ Callouts (`> [!NOTE]`) |
+| ✅ Code block copy button | ✅ `~~del~~` `==mark==` `^sup^` `~sub~` |
+| ✅ Relative images (`./img/a.png`) | ✅ Task list checkbox sync (click in preview) |
+| ✅ Export HTML / PNG / PDF | ✅ Image click zoom |
+| ✅ Custom CSS & favicon | ✅ No extra installs |
 | ✅ macOS / Windows / Linux | |
 
 ## Install
@@ -51,6 +51,8 @@ Preview sidebar toolbar: 📋 copy as rich text, 🖼️ PNG snapshot, 💾 stan
 Hover any code block in the preview for a **Copy** button. **Copy as rich text** puts the rendered HTML on the clipboard (browser button, or `MarkdownPreviewEnhanced: Copy as Rich Text` in the Command Palette) so it can be pasted into mail, Word, or Confluence with styling intact. On Linux the command needs `xclip` or `wl-copy`; the browser button works everywhere.
 
 Dark mode follows `prefers-color-scheme` until you toggle it; the choice is stored in the browser. Mermaid uses its `dark` theme with the page. Click a Mermaid diagram to enlarge it (drag to pan, scroll wheel to zoom, `Esc` to close). Clicking a line in Sublime scrolls that block to the middle of the preview (including lines inside a Mermaid fence).
+
+Plain images in the preview open the same zoom overlay on click. GFM task-list checkboxes are clickable: toggling one writes `- [ ]` / `- [x]` back to the file (local-server mode). GitHub-style callouts (`> [!NOTE]` / `TIP` / `IMPORTANT` / `WARNING` / `CAUTION`, optional custom title after the type), strikethrough `~~text~~`, highlight `==text==`, superscript `^text^` and subscript `~text~` render in preview and exports.
 
 ### Presentation mode
 

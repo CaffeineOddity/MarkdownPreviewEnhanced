@@ -161,6 +161,30 @@ class PreviewHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"ok":true}')
             return
+        if parsed.path == "/api/task_toggle":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                data = json.loads(raw.decode("utf-8"))
+            except Exception:
+                data = {}
+            line = int(data.get("line") or 0)
+            checked = bool(data.get("checked"))
+            file_key = data.get("file") or ""
+            ok = False
+            if file_key and line > 0:
+                _core.queue_task_toggle(file_key, line, checked)
+                ok = True
+            _core.get_log()("WEB->ST task_toggle line=%d checked=%s file=%s ok=%s"
+                            % (line, checked, file_key, ok))
+            resp = json.dumps({"ok": ok}, ensure_ascii=False).encode("utf-8")
+            self.send_response(200 if ok else 400)
+            self._cors()
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(resp)))
+            self.end_headers()
+            self.wfile.write(resp)
+            return
         self.send_error(404)
 
     # ── doc queue from query ───────────────────────────────────────────────

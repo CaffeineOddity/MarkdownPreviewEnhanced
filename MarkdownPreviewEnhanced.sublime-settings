@@ -35,6 +35,8 @@
     "enable_emoji": true,
 
     // Enable GFM task lists (- [ ] / - [x]).
+    // In local-server mode the preview checkboxes are clickable and write
+    // the state back to the file.
     "enable_task_lists": true,
 
     // Enable footnotes ([^1]).
