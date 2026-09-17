@@ -421,7 +421,6 @@
       if (orig) btn.textContent = orig;
     }, 1200);
   }
-
   function bindCopyCode() {
     if (bindCopyCode._bound) return;
     bindCopyCode._bound = true;
@@ -429,9 +428,14 @@
     document.addEventListener("click", function (ev) {
       var btn = ev.target.closest ? ev.target.closest(".mdpp-code-copy") : null;
       if (!btn) return;
+  
       var pre = btn.closest("pre");
       if (!pre) return;
-      copyTextToClipboard(pre.textContent || "", function (ok) {
+  
+      var code = pre.querySelector("code");
+      var text = code ? code.textContent : pre.textContent;
+  
+      copyTextToClipboard(text || "", function (ok) {
         if (ok) markCopied(btn);
         else btn.title = "Copy failed";
       });
