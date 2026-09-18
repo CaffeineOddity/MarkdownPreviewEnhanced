@@ -1,0 +1,8 @@
+MarkdownPreviewEnhanced 0.2.4
+=============================
+
+- feat: GitHub-style callouts (`> [!NOTE]` / `TIP` / `IMPORTANT` / `WARNING` / `CAUTION`)
+- feat: GFM inline syntax: strikethrough `~~text~~`, highlight `==text==`, superscript `^text^`, subscript `~text~`
+- feat: click a preview image to enlarge it (drag to pan, scroll wheel to zoom, Esc to close)
+- feat: GFM task-list checkboxes are clickable and write `- [ ]` / `- [x]` back to the file
+- fix: code-block Copy button no longer includes the button label in the copied text
