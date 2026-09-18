@@ -421,23 +421,30 @@
       if (orig) btn.textContent = orig;
     }, 1200);
   }
-
   function bindCopyCode() {
     if (bindCopyCode._bound) return;
     bindCopyCode._bound = true;
-    // Event delegation: survives SSE innerHTML replacement of .markdown-body.
+
     document.addEventListener("click", function (ev) {
       var btn = ev.target.closest ? ev.target.closest(".mdpp-code-copy") : null;
       if (!btn) return;
+
       var pre = btn.closest("pre");
       if (!pre) return;
-      copyTextToClipboard(pre.textContent || "", function (ok) {
+
+      var clone = pre.cloneNode(true);
+
+      var copyBtn = clone.querySelector(".mdpp-code-copy");
+      if (copyBtn) {
+        copyBtn.remove();
+      }
+
+      copyTextToClipboard(clone.textContent || "", function (ok) {
         if (ok) markCopied(btn);
         else btn.title = "Copy failed";
       });
     });
   }
-
   function decorateCodeCopyButtons() {
     // Add a copy button to every plain code block. Runs after each content
     // push (applyContent) and once at init for the server-rendered shell.
