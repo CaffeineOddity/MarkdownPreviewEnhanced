@@ -7,6 +7,7 @@ then discovers tests in tests/.
 
 Usage: python3 tests/run_all.py
 """
+import importlib.util
 import os
 import sys
 import types
@@ -49,17 +50,27 @@ def _inject_markdown():
     if not os.path.isdir(_MDPOPUPS_DIR):
         print("mdpopups not found at %s; render tests will skip" % _MDPOPUPS_DIR)
         return
-    if _MDPOPUPS_DIR not in sys.path:
-        sys.path.insert(0, _MDPOPUPS_DIR)
     try:
-        import markdown
-        import markdown.extensions.attr_list as attr_list
-        import markdown.extensions.codehilite as codehilite
-        import markdown.extensions.fenced_code as fenced_code
-        import markdown.extensions.footnotes as footnotes
-        import markdown.extensions.nl2br as nl2br
-        import markdown.extensions.tables as tables
-        import markdown.extensions.toc as toc
+        mdpopups = types.ModuleType("mdpopups")
+        mdpopups.__path__ = [_MDPOPUPS_DIR]
+        sys.modules["mdpopups"] = mdpopups
+        markdown_dir = os.path.join(_MDPOPUPS_DIR, "markdown")
+        spec = importlib.util.spec_from_file_location(
+            "mdpopups.markdown",
+            os.path.join(markdown_dir, "__init__.py"),
+            submodule_search_locations=[markdown_dir],
+        )
+        markdown = importlib.util.module_from_spec(spec)
+        sys.modules["mdpopups.markdown"] = markdown
+        mdpopups.markdown = markdown
+        spec.loader.exec_module(markdown)
+        import mdpopups.markdown.extensions.attr_list as attr_list
+        import mdpopups.markdown.extensions.codehilite as codehilite
+        import mdpopups.markdown.extensions.fenced_code as fenced_code
+        import mdpopups.markdown.extensions.footnotes as footnotes
+        import mdpopups.markdown.extensions.nl2br as nl2br
+        import mdpopups.markdown.extensions.tables as tables
+        import mdpopups.markdown.extensions.toc as toc
     except Exception as e:
         print("markdown import failed (%s); render tests will skip" % e)
         return
