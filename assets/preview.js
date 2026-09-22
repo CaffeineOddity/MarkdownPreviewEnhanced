@@ -147,15 +147,22 @@
     return el ? el.querySelector(".mdpp-mermaid-zoom-canvas svg") : null;
   }
 
-  function applyMermaidZoomTransform() {
+  function applyZoomTransform() {
     var mover = mermaidZoomMover();
+    if (!mover) return;
     var svg = mermaidZoomSvg();
-    if (!mover || !svg) return;
-    // Resize the SVG itself (vector) instead of CSS scale(), which
-    // rasterizes and looks blurry. Pan with translate only.
-    var w = Math.max(40, _mermaidZoomBaseW * _mermaidZoomScale);
-    svg.style.width = w + "px";
-    svg.style.height = "auto";
+    if (svg) {
+      // Resize the SVG itself (vector) instead of CSS scale(), which
+      // rasterizes and looks blurry. Pan with translate only.
+      var w = Math.max(40, _mermaidZoomBaseW * _mermaidZoomScale);
+      svg.style.width = w + "px";
+      svg.style.height = "auto";
+    } else {
+      var img = mover.querySelector("img");
+      if (!img) return;
+      img.style.width = Math.max(40, _mermaidZoomBaseW * _mermaidZoomScale) + "px";
+      img.style.height = "auto";
+    }
     mover.style.transform = "translate(-50%, -50%) translate("
       + _mermaidZoomX + "px," + _mermaidZoomY + "px)";
   }
@@ -187,13 +194,16 @@
     });
     el.addEventListener("wheel", function (ev) {
       if (el.hidden) return;
+      // mermaid（svg）场景由这里缩放；img 场景由 bindImageZoom 的 wheel 处理，
+      // 避免两个监听器同时缩放导致翻倍。
+      if (!mermaidZoomSvg()) return;
       ev.preventDefault();
       var dy = ev.deltaY;
       if (ev.deltaMode === 1) dy *= 16;
       if (ev.deltaMode === 2) dy *= 80;
       _mermaidZoomScale = Math.min(6, Math.max(0.4,
         _mermaidZoomScale * Math.exp(-dy * 0.0009)));
-      applyMermaidZoomTransform();
+      applyZoomTransform();
     }, { passive: false });
 
     canvas.addEventListener("pointerdown", function (ev) {
@@ -215,7 +225,7 @@
       drag.y = ev.clientY;
       _mermaidZoomX += dx;
       _mermaidZoomY += dy;
-      applyMermaidZoomTransform();
+      applyZoomTransform();
     });
     function endDrag(ev) {
       if (!drag.on) return;
@@ -251,7 +261,7 @@
     _mermaidZoomX = 0;
     _mermaidZoomY = 0;
     mover.appendChild(clone);
-    applyMermaidZoomTransform();
+    applyZoomTransform();
     el.hidden = false;
     document.body.style.overflow = "hidden";
   }
@@ -301,21 +311,9 @@
     _mermaidZoomX = 0;
     _mermaidZoomY = 0;
     mover.appendChild(clone);
-    applyImageZoomTransform();
+    applyZoomTransform();
     el.hidden = false;
     document.body.style.overflow = "hidden";
-  }
-
-  function applyImageZoomTransform() {
-    var mover = mermaidZoomMover();
-    var root = $("mdpp-mermaid-zoom");
-    if (!mover || !root) return;
-    var inner = mover.querySelector("img");
-    if (!inner) return;
-    inner.style.width = Math.max(40, _mermaidZoomBaseW * _mermaidZoomScale) + "px";
-    inner.style.height = "auto";
-    mover.style.transform = "translate(-50%, -50%) translate("
-      + _mermaidZoomX + "px," + _mermaidZoomY + "px)";
   }
 
   function bindImageZoom() {
@@ -347,7 +345,7 @@
       if (ev.deltaMode === 2) dy *= 80;
       _mermaidZoomScale = Math.min(6, Math.max(0.4,
         _mermaidZoomScale * Math.exp(-dy * 0.0009)));
-      applyImageZoomTransform();
+      applyZoomTransform();
     }, { passive: false });
   }
 

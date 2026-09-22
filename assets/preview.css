@@ -580,6 +580,11 @@ html[data-mdpp-theme="dark"] .markdown-body .mdpp-callout-caution {
   border: 0;
   box-shadow: none;
   border-radius: 0;
+  /* 与 canvas 内 svg 一致：指针事件直接落到 canvas，拖拽平移才顺滑，
+     且避免拖动时命中 img 触发原生图片拖拽 ghost */
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 /* ── tables ───────────────────────────────────────────────────────────── */
