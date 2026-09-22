@@ -1,0 +1,6 @@
+MarkdownPreviewEnhanced 0.2.5
+=============================
+
+- Merge pull request #8 from hcsum/fix/mdpopups-inline-imports
+- fix: import inline extension from mdpopups namespace
+- chore: restore debug logging on master
