@@ -53,31 +53,41 @@ def _load_mdpopups():
     except Exception:
         pass
 
-    # Fallback: locate mdpopups under ST's Lib/python38 without going through
-    # Package Control's dependency injection.
+    # Fallback: locate mdpopups under ST's <data>/Lib without going through
+    # Package Control's dependency injection. The plugin-host Python version
+    # differs across ST builds (python33 / python38 / python314), so probe
+    # Lib/python3*/mdpopups instead of hard-coding one version.
     import sys
     import glob
-    candidates = []
-    # <ST data>/Lib/python38 — the canonical PC dependency install location.
+
+    def _py_ver(path):
+        m = re.match(r"python(\d+)", os.path.basename(path))
+        return int(m.group(1)) if m else 0
+
+    lib_roots = []
+    # <ST data>/Lib — canonical PC dependency install location.
     for env_var in ("SUBLIME_PACKAGES", "XDG_DATA_HOME"):
         base = os.environ.get(env_var)
         if base:
-            candidates.append(os.path.join(base, "..", "Lib", "python38"))
-    # macOS default data dir.
-    candidates.append(
-        os.path.expanduser(
-            "~/Library/Application Support/Sublime Text/Lib/python38"
-        )
-    )
-    # Windows default data dir.
-    candidates.append(
-        os.path.join(os.environ.get("APPDATA", ""), "Sublime Text", "Lib",
-                     "python38")
-    )
-    # Linux default data dir.
-    candidates.append(
-        os.path.expanduser("~/.config/sublime-text/Lib/python38")
-    )
+            lib_roots.append(os.path.join(base, "..", "Lib"))
+    # macOS / Windows / Linux default data dirs.
+    lib_roots.append(
+        os.path.expanduser("~/Library/Application Support/Sublime Text/Lib"))
+    lib_roots.append(
+        os.path.join(os.environ.get("APPDATA", ""), "Sublime Text", "Lib"))
+    lib_roots.append(os.path.expanduser("~/.config/sublime-text/Lib"))
+
+    candidates = []
+    for root in lib_roots:
+        if not root or not os.path.isdir(root):
+            continue
+        # 优先新宿主版本(python314 > python38 > python33)。
+        for sub in sorted(
+            glob.glob(os.path.join(root, "python3*")),
+            key=_py_ver, reverse=True,
+        ):
+            if os.path.isdir(os.path.join(sub, "mdpopups")):
+                candidates.append(sub)
     seen = set()
     for c in candidates:
         if not c or c in seen or not os.path.isdir(c):
