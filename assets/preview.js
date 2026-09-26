@@ -16,6 +16,34 @@
     channelFile = new URLSearchParams(window.location.search).get("file") || "";
   } catch (err) {}
   var channelQuery = channelFile ? "?file=" + encodeURIComponent(channelFile) : "";
+  var authToken = (typeof window.MDPP_TOKEN === "string") ? window.MDPP_TOKEN : "";
+
+  function withAuthQuery(url) {
+    if (!authToken) return url;
+    var s = String(url);
+    if (s.indexOf("token=") !== -1) return s;
+    return s + (s.indexOf("?") >= 0 ? "&" : "?") + "token=" + encodeURIComponent(authToken);
+  }
+
+  // EventSource / sendBeacon 不能加自定义头。fetch 走头，避免口令出现在 URL 里。
+  function apiFetch(url, opts) {
+    var options = opts || {};
+    var headers = {};
+    var src = options.headers || {};
+    var key;
+    for (key in src) {
+      if (Object.prototype.hasOwnProperty.call(src, key)) headers[key] = src[key];
+    }
+    if (authToken) headers["X-MPE-Token"] = authToken;
+    var next = {};
+    for (key in options) {
+      if (Object.prototype.hasOwnProperty.call(options, key) && key !== "headers") {
+        next[key] = options[key];
+      }
+    }
+    next.headers = headers;
+    return fetch(url, next);
+  }
 
   function windowNameFor(file) {
     return "mdpp_" + encodeURIComponent(file || "untitled");
@@ -369,7 +397,7 @@
         checked: box.checked,
       };
       // 立即上报；ST 回写后 debounce 重渲染会推送新 HTML，状态随之收敛
-      fetch("/api/task_toggle", {
+      apiFetch("/api/task_toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -645,10 +673,10 @@
     if (cfg.mode !== "server") return;
     if (bc) {
       if (!isLeader) return;
-      es = new EventSource("/api/stream");
+      es = new EventSource(withAuthQuery("/api/stream"));
     } else {
       if (document.hidden) return;
-      es = new EventSource("/api/stream" + channelQuery);
+      es = new EventSource(withAuthQuery("/api/stream" + channelQuery));
     }
     attachStreamHandlers(es);
   }
@@ -773,7 +801,7 @@
   function fetchSnapshot(attempt) {
     if (cfg.mode !== "server") return;
     var n = attempt || 0;
-    fetch("/api/snapshot" + channelQuery, { cache: "no-store" })
+    apiFetch("/api/snapshot" + channelQuery, { cache: "no-store" })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var html = data && typeof data.html === "string" ? data.html : "";
@@ -883,7 +911,7 @@
     _lastNotifyFile = channelFile;
     _lastNotifyTime = now;
     console.log(ts() + " [MDPP] notifyDocSwitch file=" + channelFile);
-    fetch("/api/open_doc?file=" + encodeURIComponent(channelFile)
+    apiFetch("/api/open_doc?file=" + encodeURIComponent(channelFile)
           + "&tab_switch=1",
           { cache: "no-store" }).catch(function (e) {
       console.log(ts() + " [MDPP] notifyDocSwitch fetch error: " + e);
@@ -989,18 +1017,18 @@
       + "&gen=" + tabGen + "&hist=" + (history.length || 0);
     try {
       if (navigator.sendBeacon) {
-        navigator.sendBeacon(url);
+        navigator.sendBeacon(withAuthQuery(url));
         return;
       }
     } catch (err) {}
-    fetch(url, { method: "POST", cache: "no-store", keepalive: true }).catch(function () {});
+    apiFetch(url, { method: "POST", cache: "no-store", keepalive: true }).catch(function () {});
   }
 
   function announceTab() {
     if (cfg.mode !== "server" || !channelFile) {
       return Promise.resolve(false);
     }
-    return fetch("/api/tab_open?file=" + encodeURIComponent(channelFile), { cache: "no-store" })
+    return apiFetch("/api/tab_open?file=" + encodeURIComponent(channelFile), { cache: "no-store" })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         tabGen = data && data.gen ? data.gen : 0;
@@ -1068,7 +1096,7 @@
       var it = items[i];
       var active = it.file === channelFile ? " mdpp-tabs-active" : "";
       html += '<li class="mdpp-tabs-item' + active + '">'
-        + '<a href="/?file=' + encodeURIComponent(it.file) + '" data-file="'
+        + '<a href="' + escHtml(withAuthQuery("/?file=" + encodeURIComponent(it.file))) + '" data-file="'
         + escHtml(it.file) + '">' + escHtml(it.title) + "</a></li>";
     }
     list.innerHTML = html;
@@ -1088,7 +1116,7 @@
 
   function switchToPreview(file) {
     if (!file || file === channelFile) return;
-    var url = "/?file=" + encodeURIComponent(file);
+    var url = withAuthQuery("/?file=" + encodeURIComponent(file));
     var name = windowNameFor(file);
     var alive = fileIsAlive(file);
     // User gesture: window.open(url, name) either reuses a named window or
@@ -1102,7 +1130,7 @@
     }
     bcSend({ type: "focus-tab", file: file });
     if (cfg.mode === "server" && alive) {
-      fetch("/api/open_doc?file=" + encodeURIComponent(file) + "&tab_switch=1",
+      apiFetch("/api/open_doc?file=" + encodeURIComponent(file) + "&tab_switch=1",
             { cache: "no-store" }).catch(function () {});
     }
   }
@@ -1319,7 +1347,7 @@
     lastReportedLine = line;
     console.log(ts() + " [MDPP] browser_scroll -> ST line=" + line
                 + " file=" + channelFile + " from=" + _scrollFrom);
-    fetch("/api/browser_scroll", {
+    apiFetch("/api/browser_scroll", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ line: line, file: channelFile, from: _scrollFrom }),
@@ -1393,7 +1421,7 @@
 
   window.mdppExportHtml = function mdppExportHtml() {
     setExportLoading("mdpp-export-html", true);
-    fetch("/api/export/html" + channelQuery)
+    apiFetch("/api/export/html" + channelQuery)
       .then(function (r) {
         if (!r.ok) return r.json().then(function (e) { throw new Error(e.error || "export failed"); });
         return r.blob();
@@ -1494,7 +1522,7 @@
     // Reuse the current URL's ?file= param (or channelQuery) so the
     // presentation page shows the same document.
     var q = channelQuery || "";
-    window.open("/presentation" + q, "_blank");
+    window.open(withAuthQuery("/presentation" + q), "_blank");
   };
 
   // ── dark mode (issue #5) ─────────────────────────────────────────────

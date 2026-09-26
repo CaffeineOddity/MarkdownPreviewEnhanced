@@ -4,6 +4,7 @@ All routing (GET/POST), SSE streaming, asset serving, and API endpoints
 live here.  State is accessed through ``preview_state_core``.
 """
 import hashlib
+import hmac
 import json
 import os
 import queue
@@ -16,6 +17,122 @@ from urllib.parse import unquote, urlparse, parse_qs
 
 from . import assets as pkg_assets
 from . import preview_state_core as _core
+
+# 预览页会加载的资源。其它扩展（.env、密钥、源码）一律不从 /doc/ 送出。
+_DOC_EXTENSIONS = frozenset({
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".bmp", ".avif",
+    ".woff", ".woff2", ".ttf", ".otf", ".eot",
+    ".mp4", ".webm", ".ogg", ".mp3", ".wav", ".m4a", ".mov",
+    ".css", ".pdf",
+    ".md", ".markdown",
+})
+
+_LOCAL_HOSTS = frozenset(("127.0.0.1", "localhost"))
+
+
+def host_allowed(host_header):
+    """True when Host is this loopback server, not a DNS-rebound name."""
+    if not host_header:
+        return False
+    host = host_header.strip().lower()
+    if not host or host.startswith("["):
+        return False
+    hostname = host.split(":", 1)[0]
+    return hostname in _LOCAL_HOSTS
+
+
+def fetch_site_allowed(site):
+    """Browser Sec-Fetch-Site. Cross-site and same-site (other port) are refused.
+
+    Missing header is allowed so non-browser clients that already hold the
+    token (tests, the first OS-opened navigation on older browsers) still work.
+    A web page cannot omit this header.
+    """
+    value = (site or "").strip().lower()
+    return value in ("", "none", "same-origin")
+
+
+def origin_allowed(origin, port):
+    """True when Origin is absent or is this server's own origin."""
+    if not origin:
+        return True
+    port = str(port)
+    return origin in (
+        "http://127.0.0.1:%s" % port,
+        "http://localhost:%s" % port,
+    )
+
+
+def token_matches(expected, presented):
+    """Constant-time compare. Empty or mismatched tokens fail closed."""
+    if not expected or not presented or not isinstance(presented, str):
+        return False
+    try:
+        left = expected.encode("utf-8")
+        right = presented.encode("utf-8")
+    except Exception:
+        return False
+    if len(left) != len(right):
+        return False
+    return hmac.compare_digest(left, right)
+
+
+def cookie_value(header, name):
+    """Return one cookie value, or ''."""
+    if not header or not name:
+        return ""
+    prefix = name + "="
+    for part in header.split(";"):
+        part = part.strip()
+        if part.startswith(prefix):
+            return part[len(prefix):]
+    return ""
+
+
+def presented_tokens(header_token, query, cookie_header):
+    """Token candidates from ``X-MPE-Token``, ``?token=``, and the cookie."""
+    found = []
+    if header_token:
+        found.append(header_token.strip())
+    for item in (parse_qs(query or "").get("token") or []):
+        if item:
+            found.append(item)
+    baked = cookie_value(cookie_header or "", "mpe_token")
+    if baked:
+        found.append(baked)
+    return found
+
+
+def any_token_matches(expected, candidates):
+    for candidate in candidates:
+        if token_matches(expected, candidate):
+            return True
+    return False
+
+
+def doc_rel_allowed(rel):
+    """True when *rel* is a preview asset, not a hidden or secret file."""
+    text = unquote(rel or "").replace("\\", "/").split("?", 1)[0]
+    base = text.rsplit("/", 1)[-1]
+    if not base or base.startswith("."):
+        return False
+    ext = os.path.splitext(base)[1].lower()
+    return ext in _DOC_EXTENSIONS
+
+
+def redact_query(query):
+    """Drop the token before a request line is written to the log."""
+    if not query:
+        return ""
+    kept = [
+        piece for piece in query.split("&")
+        if piece and not piece.startswith("token=")
+    ]
+    redacted = "&".join(kept)
+    if "token=" in (query or ""):
+        redacted = (redacted + "&" if redacted else "") + "token=***"
+    return redacted
+
 
 # ── asset cache ─────────────────────────────────────────────────────────────
 
@@ -61,32 +178,117 @@ class PreviewHandler(BaseHTTPRequestHandler):
 
     # ── shared headers ──────────────────────────────────────────────────────
 
-    def _common_headers(self, cache_control):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+    def _auth_token(self):
+        return getattr(self.server, "auth_token", "") or ""
+
+    def _request_allowed(self, parsed):
+        """Sensitive routes require the session token and a same-origin browser.
+
+        ``Access-Control-Allow-Origin: *`` used to let any page read the
+        response. State-changing GETs still run without CORS, so the token
+        and ``Sec-Fetch-Site`` / ``Origin`` checks are what actually stop
+        another tab from driving the server.
+        """
+        if not fetch_site_allowed(self.headers.get("Sec-Fetch-Site")):
+            return False
+        port = self.server.server_address[1]
+        if not origin_allowed(self.headers.get("Origin"), port):
+            return False
+        candidates = presented_tokens(
+            self.headers.get("X-MPE-Token"),
+            parsed.query,
+            self.headers.get("Cookie"),
+        )
+        return any_token_matches(self._auth_token(), candidates)
+
+    def _common_headers(self, cache_control, set_cookie=False):
         self.send_header("Cache-Control", cache_control)
         self.send_header("Connection", "close")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        if set_cookie:
+            token = self._auth_token()
+            if token:
+                # Session cookie. SameSite=Strict keeps it off cross-site
+                # requests; HttpOnly keeps page scripts from reading it.
+                self.send_header(
+                    "Set-Cookie",
+                    "mpe_token=%s; HttpOnly; SameSite=Strict; Path=/" % token,
+                )
 
     def _cors(self):
-        self._common_headers("no-store")
+        self._common_headers("no-store", set_cookie=True)
 
     def _static_headers(self):
         self._common_headers("public, max-age=31536000, immutable")
 
+    def _forbid(self):
+        body = b'{"error":"forbidden"}'
+        self.send_response(403)
+        self._common_headers("no-store")
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass
+
+    def _inject_client_token(self, html):
+        """Give the preview page the token, then drop it from the address bar.
+
+        Subresources and later navigations authenticate with the cookie set
+        on this response. API calls also send ``X-MPE-Token`` so they still
+        work if the cookie is missing.
+        """
+        token = self._auth_token()
+        if not token or not html:
+            return html
+        snippet = (
+            "<script>window.MDPP_TOKEN=%s;"
+            "(function(){try{var u=new URL(location.href);"
+            "if(!u.searchParams.has('token'))return;"
+            "u.searchParams.delete('token');"
+            "history.replaceState(null,'',u.pathname+u.search+u.hash);"
+            "}catch(e){}})();</script>\n"
+        ) % json.dumps(token)
+        pos = html.lower().find("<head>")
+        if pos >= 0:
+            insert_at = pos + len("<head>")
+            return html[:insert_at] + "\n" + snippet + html[insert_at:]
+        return snippet + html
+
     # ── routing ────────────────────────────────────────────────────────────
 
     def do_OPTIONS(self):
+        parsed = urlparse(self.path)
+        if not host_allowed(self.headers.get("Host")) or not self._request_allowed(parsed):
+            self._forbid()
+            return
         _core.touch_activity()
         self.send_response(204)
         self._cors()
         self.end_headers()
 
     def do_GET(self):
-        _core.touch_activity()
         parsed = urlparse(self.path)
         path = parsed.path
-        _core.get_log()("WEB->ST GET %s?%s" % (path, parsed.query))
+        if not host_allowed(self.headers.get("Host")):
+            self._forbid()
+            return
+        # Package JS/CSS/fonts are not user data. The preview page loads them
+        # by URL and they must stay cacheable, so they are not behind the token.
+        if path.startswith("/assets/"):
+            _core.touch_activity()
+            _core.get_log()("WEB->ST GET %s" % path)
+            self._serve_package_asset(path[len("/assets/"):])
+            return
+        if not self._request_allowed(parsed):
+            _core.get_log()("WEB->ST rejected GET %s" % path)
+            self._forbid()
+            return
+        _core.touch_activity()
+        _core.get_log()("WEB->ST GET %s?%s" % (path, redact_query(parsed.query)))
 
         if path in ("/", "/preview.html", "/index.html"):
             file_key = _core._file_key_from_query(parsed.query)
@@ -125,8 +327,21 @@ class PreviewHandler(BaseHTTPRequestHandler):
         self._serve_output(path.lstrip("/"))
 
     def do_POST(self):
-        _core.touch_activity()
         parsed = urlparse(self.path)
+        if (
+            not host_allowed(self.headers.get("Host"))
+            or not self._request_allowed(parsed)
+        ):
+            _core.get_log()("WEB->ST rejected POST %s" % parsed.path)
+            try:
+                length = int(self.headers.get("Content-Length", 0) or 0)
+            except (TypeError, ValueError):
+                length = 0
+            if length > 0:
+                self.rfile.read(length)
+            self._forbid()
+            return
+        _core.touch_activity()
         _core.get_log()("WEB->ST POST %s" % parsed.path)
         if parsed.path == "/api/tab_close":
             length = int(self.headers.get("Content-Length", 0) or 0)
@@ -190,15 +405,24 @@ class PreviewHandler(BaseHTTPRequestHandler):
     # ── doc queue from query ───────────────────────────────────────────────
 
     def _queue_doc_from_query(self, query):
-        q = unquote(query or "").strip()
-        if not q:
-            return True
-        for prefix in ("file://", "file="):
-            if q.startswith(prefix):
-                q = q[len(prefix):]
-                break
-        if q.startswith("file://"):
-            q = q[len("file://"):]
+        raw = query or ""
+        params = parse_qs(raw)
+        # ?file=<path>&token=<secret>：token 不能被拼进路径。
+        # 老地址 ?file:///abs/a.md 没有 '='，parse_qs 解析不到 file。
+        if "file" in params or "token" in params:
+            q = (params.get("file") or [""])[0]
+            if not q:
+                return True
+        else:
+            q = unquote(raw).strip()
+            if not q:
+                return True
+            for prefix in ("file://", "file="):
+                if q.startswith(prefix):
+                    q = q[len(prefix):]
+                    break
+            if q.startswith("file://"):
+                q = q[len("file://"):]
         if not os.path.isabs(q):
             return False
         if not q.lower().endswith(".md"):
@@ -217,11 +441,18 @@ class PreviewHandler(BaseHTTPRequestHandler):
         return True
 
     def _serve_query_error(self, query):
-        q = unquote(query or "").strip()
-        if q.startswith("file://"):
-            q = q[len("file://"):]
-        elif q.startswith("file="):
-            q = q[len("file="):]
+        params = parse_qs(query or "")
+        if params.get("file"):
+            q = params["file"][0]
+        else:
+            q = unquote(query or "").strip()
+            if q.startswith("file://"):
+                q = q[len("file://"):]
+            elif q.startswith("file="):
+                q = q[len("file="):]
+            token_at = q.find("&token=")
+            if token_at >= 0:
+                q = q[:token_at]
         if os.path.isdir(q):
             reason = "是一个目录,请指向具体的 .md 文件"
         elif not q.lower().endswith(".md"):
@@ -266,7 +497,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 use_server=True,
                 title=os.path.basename(file_key or "preview"),
             )
-        data = html.encode("utf-8")
+        data = self._inject_client_token(html).encode("utf-8")
         self.send_response(200)
         self._cors()
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -295,7 +526,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
             )
         title = os.path.basename(file_key) if file_key else "Presentation"
         html = build_presentation(body_html, title=title)
-        data = html.encode("utf-8")
+        data = self._inject_client_token(html).encode("utf-8")
         self.send_response(200)
         self._cors()
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -544,8 +775,8 @@ class PreviewHandler(BaseHTTPRequestHandler):
         except Exception:
             self.send_error(404)
             return
+        ext = os.path.splitext(full)[1].lower()
         if not content_type:
-            ext = os.path.splitext(full)[1].lower()
             content_type = {
                 ".html": "text/html; charset=utf-8",
                 ".css": "text/css; charset=utf-8",
@@ -558,15 +789,39 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 ".webp": "image/webp",
                 ".json": "application/json",
                 ".md": "text/markdown; charset=utf-8",
+                ".markdown": "text/markdown; charset=utf-8",
+                ".ico": "image/x-icon",
+                ".bmp": "image/bmp",
+                ".avif": "image/avif",
+                ".pdf": "application/pdf",
+                ".woff": "font/woff",
+                ".woff2": "font/woff2",
+                ".ttf": "font/ttf",
+                ".otf": "font/otf",
+                ".eot": "application/vnd.ms-fontobject",
+                ".mp4": "video/mp4",
+                ".webm": "video/webm",
+                ".mp3": "audio/mpeg",
+                ".wav": "audio/wav",
+                ".m4a": "audio/mp4",
+                ".mov": "video/quicktime",
             }.get(ext, "application/octet-stream")
         self.send_response(200)
         self._cors()
+        # SVG/HTML opened as a document must not run script in this origin.
+        if ext in (".svg", ".html", ".htm", ".xhtml", ".xml"):
+            self.send_header(
+                "Content-Security-Policy", "default-src 'none'; sandbox",
+            )
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
 
     def _serve_doc(self, rel):
+        if not doc_rel_allowed(rel):
+            self.send_error(404)
+            return
         with _core._STATE.lock:
             doc_dirs = [ch.doc_dir for ch in _core._STATE.channels.values() if ch.doc_dir]
         for doc_dir in doc_dirs:

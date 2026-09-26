@@ -9,10 +9,14 @@ Re-exports the public API from ``preview_state_core`` for backward
 compatibility so existing imports ``from .preview_server import
 update_content`` still work.
 """
+import binascii
+import os
+import re
 import sys
 import threading
 from http.server import HTTPServer
 from socketserver import ThreadingMixIn
+from urllib.parse import urlsplit, urlunsplit
 
 from .preview_state_core import (
     # state
@@ -53,14 +57,51 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
         HTTPServer.handle_error(self, request, client_address)
 
 
+_TOKEN_IN_TEXT = re.compile(r"token=[^&\s\"']+")
+
+
+def append_auth_token(url, token):
+    """Append the session token as a ``token`` query param."""
+    if not url or not token or "token=" in url:
+        return url
+    sep = "&" if "?" in url else "?"
+    return "%s%stoken=%s" % (url, sep, token)
+
+
+def strip_auth_token(url):
+    """Return *url* without the session token query param."""
+    if not url or "token=" not in url:
+        return url
+    parts = urlsplit(url)
+    kept = [
+        piece for piece in parts.query.split("&")
+        if piece and not piece.startswith("token=")
+    ]
+    return urlunsplit((
+        parts.scheme, parts.netloc, parts.path, "&".join(kept), parts.fragment,
+    ))
+
+
+def redact_auth_text(text):
+    """Hide the session token if a URL or log line contains one."""
+    if not text or "token=" not in text:
+        return text
+    return _TOKEN_IN_TEXT.sub("token=***", text)
+
+
 class PreviewServer:
-    """Lifecycle wrapper around the threaded HTTP server."""
+    """Lifecycle wrapper around the threaded HTTP server.
+
+    ``token`` is a per-process secret. Preview URLs carry it once so the
+    browser can set a cookie; every sensitive request must present it.
+    """
 
     def __init__(self):
         self._httpd = None
         self._thread = None
         self.port = None
         self.host = "127.0.0.1"
+        self.token = None
 
     @property
     def running(self):
@@ -78,10 +119,12 @@ class PreviewServer:
             touch_activity()
             return self.base_url
 
+        self.token = binascii.hexlify(os.urandom(24)).decode("ascii")
         last_err = None
         for p in range(int(port), int(port) + 20):
             try:
                 httpd = ThreadingHTTPServer((self.host, p), PreviewHandler)
+                httpd.auth_token = self.token
                 self._httpd = httpd
                 self.port = p
                 break
@@ -89,6 +132,7 @@ class PreviewServer:
                 last_err = e
                 continue
         if self._httpd is None:
+            self.token = None
             (log or _noop_log)("server start failed: %s" % last_err)
             return None
 
@@ -119,6 +163,7 @@ class PreviewServer:
         self._httpd = None
         self._thread = None
         self.port = None
+        self.token = None
         log("preview server stopped")
 
 
