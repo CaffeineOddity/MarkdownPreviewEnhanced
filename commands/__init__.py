@@ -13,4 +13,5 @@ from .paste_html_as_markdown import (  # noqa: F401
 )
 from .presentation import MarkdownPreviewEnhancedPresentationCommand  # noqa: F401
 from .refresh import MarkdownPreviewEnhancedRefreshCommand  # noqa: F401
+from .task_toggle import MarkdownPreviewEnhancedTaskToggleCommand  # noqa: F401
 from .toggle import MarkdownPreviewEnhancedToggleCommand  # noqa: F401
