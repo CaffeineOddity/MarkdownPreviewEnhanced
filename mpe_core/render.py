@@ -90,7 +90,11 @@ def publish(result, view, force_open=False):
     use_server = bool(config.get("use_local_server", True))
     custom_css = config.get("custom_css", "") or ""
     favicon = config.get("favicon", "") or ""
-    title = view_title(view)
+    frontmatter = result.get("frontmatter")
+    title = (
+        (frontmatter.get("title") if isinstance(frontmatter, dict) else None)
+        or view_title(view)
+    )
 
     body = result["body_html"]
     toc = result["toc_html"] if show_toc else ""
@@ -106,6 +110,7 @@ def publish(result, view, force_open=False):
         custom_css=custom_css,
         title=title,
         favicon=favicon,
+        frontmatter=frontmatter,
     )
 
     base_dir = view_base_dir(view)

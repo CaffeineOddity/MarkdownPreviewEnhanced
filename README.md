@@ -15,12 +15,13 @@ Browser live Markdown preview for Sublime Text 4. No extra installs.
 | ✅ One file ↔ one preview tab | ✅ GFM task lists |
 | ✅ Editor ↔ preview tab switch | ✅ Footnotes |
 | ✅ Scroll sync (editor ↔ preview) | ✅ GFM emoji (`:smile:`) |
-| ✅ TOC + preview tab list | ✅ YAML frontmatter |
-| ✅ Presentation mode (16:9 slides) | ✅ KaTeX (`$…$` / `$$…$$`) |
+| ✅ TOC + preview tab list | ✅ YAML frontmatter (title / date / tags banner) |
+| ✅ Presentation mode (16:9 slides, page breaks + notes) | ✅ KaTeX (`$…$` / `$$…$$`) |
 | ✅ Dark mode (follows system, persisted) | ✅ Mermaid diagrams (click to zoom) |
 | ✅ Copy as rich text (📋 / command) | ✅ ECharts |
-| ✅ Paste as markdown (⇧⌘V / right-click) | ✅ Callouts (`> [!NOTE]`) |
+| ✅ Paste as markdown (⇧⌘V / right-click, HTML + screenshots) | ✅ Callouts (`> [!NOTE]`) |
 | ✅ Code block copy button | ✅ `~~del~~` `==mark==` `^sup^` `~sub~` |
+| | ✅ Code block filename / line numbers / highlight |
 | ✅ Relative images (`./img/a.png`) | ✅ Task list checkbox sync (click in preview) |
 | ✅ Export HTML / PNG / PDF | ✅ Image click zoom |
 | ✅ Custom CSS & favicon | ✅ No extra installs |

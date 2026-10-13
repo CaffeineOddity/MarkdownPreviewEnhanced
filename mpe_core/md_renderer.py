@@ -14,6 +14,7 @@ import os
 import re
 import hashlib
 
+from . import code_fence
 from .log import debug, error
 
 
@@ -226,6 +227,73 @@ def strip_frontmatter(text):
     return text[m.end():], fm, offset
 
 
+def parse_frontmatter(fm):
+    """Parse the bare ``title`` / ``date`` / ``tags`` keys from frontmatter.
+
+    Returns a dict ``{"title": str|None, "date": str|None, "tags": [str]}``,
+    or ``None`` when no recognized key is present. ``tags`` accepts an inline
+    ``[a, b]`` list or a block list of ``- item`` lines; unrelated keys are
+    ignored. Hand-rolled subset — no YAML dependency.
+    """
+    if fm is None:
+        return None
+    lines = fm.splitlines()
+    if lines and lines[0].strip() == "---":
+        lines = lines[1:]
+    if lines and lines[-1].strip() == "---":
+        lines = lines[:-1]
+
+    meta = {"title": None, "date": None, "tags": []}
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if not line.strip() or line.lstrip().startswith("#"):
+            i += 1
+            continue
+        m = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)[ \t]*:[ \t]*(.*)$", line)
+        if not m:
+            i += 1
+            continue
+        key = m.group(1).lower()
+        val = m.group(2).strip()
+        if key == "tags":
+            if val.startswith("["):
+                meta["tags"] = _parse_inline_list(val)
+                i += 1
+            elif val == "":
+                tags = []
+                i += 1
+                while i < len(lines) and lines[i].strip().startswith("- "):
+                    tags.append(lines[i].strip()[2:].strip())
+                    i += 1
+                meta["tags"] = [t for t in tags if t]
+            else:
+                meta["tags"] = [val] if val else []
+                i += 1
+            continue
+        if key in ("title", "date"):
+            meta[key] = _unquote(val) if val else None
+        i += 1
+
+    if meta["title"] is None and meta["date"] is None and not meta["tags"]:
+        return None
+    return meta
+
+
+def _parse_inline_list(s):
+    s = s.strip()
+    if s.startswith("[") and s.endswith("]"):
+        s = s[1:-1]
+    return [x.strip().strip("\"'") for x in s.split(",") if x.strip()]
+
+
+def _unquote(s):
+    s = s.strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in "\"'":
+        return s[1:-1]
+    return s
+
+
 def _collect_heading_lines(text):
     """Return list of (line_no 1-based, level, title) for ATX headings."""
     out = []
@@ -436,7 +504,7 @@ def _inject_block_lines(html, block_lines, line_offset):
 
 def _apply_task_lists(html):
     # checkbox 不带 disabled：预览中可点击，点击事件由 preview.js 上报
-    # /api/task_toggle 回写编辑器（见 specs/task-list-checkbox-sync.md）
+    # /api/task_toggle 回写编辑器（见 docs/specs/task-list-checkbox-sync.md）
     html = _TASK_OPEN_RE.sub(
         r'\1\2<input type="checkbox" class="task-list-item-checkbox"> ',
         html,
@@ -826,11 +894,14 @@ def render(
             "errors": ["python-markdown not available: " + (_IMPORT_ERROR or "?")],
             "hash": content_hash(body),
             "heading_lines": [],
+            "frontmatter": None,
         }
 
     line_offset = 0
+    fm = None
     if strip_yaml:
-        text, _fm, line_offset = strip_frontmatter(text)
+        text, fm, line_offset = strip_frontmatter(text)
+    frontmatter = parse_frontmatter(fm)
 
     heading_lines = _collect_heading_lines(text)
     if line_offset:
@@ -883,6 +954,10 @@ def render(
     if math_html:
         debug("protected %d math region(s)" % len(math_html))
 
+    # Strip title="{...}" metadata off fences so python-markdown's fenced_code
+    # doesn't choke on them; stashed blocks come back as .mdpp-code after convert.
+    text, fence_stash = code_fence.extract_code_fences(text)
+
     # Pass extension *instances* (not string names like
     # "markdown.extensions.fenced_code") so python-markdown does not need to
     # resolve extensions via absolute importlib paths at convert time.
@@ -928,7 +1003,12 @@ def render(
                 "errors": [str(e2)],
                 "hash": content_hash(body),
                 "heading_lines": heading_lines,
+                "frontmatter": frontmatter,
             }
+
+    # Restore stashed metadata fences before mermaid/echarts restore so the
+    # only <pre> in html are real code blocks (no <pre class="mermaid"> yet).
+    html = code_fence.restore_code_fences(html, fence_stash)
 
     for idx, svg in enumerate(rendered_svgs):
         html = html.replace(_MERMAID_MARKER_TMPL % idx, svg)
@@ -961,4 +1041,5 @@ def render(
         "errors": errors,
         "hash": content_hash(html + toc_html),
         "heading_lines": heading_lines,
+        "frontmatter": frontmatter,
     }

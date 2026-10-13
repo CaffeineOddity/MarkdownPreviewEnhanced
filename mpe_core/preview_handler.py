@@ -404,6 +404,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 custom_css=settings.get("custom_css", ""),
                 title=settings.get("title", "Markdown Export"),
                 favicon=settings.get("favicon", ""),
+                frontmatter=result.get("frontmatter"),
             )
             data = html.encode("utf-8")
             self.send_response(200)

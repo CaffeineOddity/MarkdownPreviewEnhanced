@@ -15,12 +15,13 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 | ✅ 一文件一预览 tab | ✅ GFM 任务列表 |
 | ✅ 编辑器 ↔ 预览 tab 互切 | ✅ 脚注 |
 | ✅ 滚动同步（编辑器 ↔ 预览） | ✅ GFM emoji（`:smile:`） |
-| ✅ 目录 + 预览 tab 列表 | ✅ YAML frontmatter |
-| ✅ 演示模式（16:9 幻灯片） | ✅ KaTeX（`$…$` / `$$…$$`） |
+| ✅ 目录 + 预览 tab 列表 | ✅ YAML frontmatter（标题 / 日期 / 标签顶栏） |
+| ✅ 演示模式（16:9 幻灯片，分页 + 备注） | ✅ KaTeX（`$…$` / `$$…$$`） |
 | ✅ 暗色模式（跟随系统，可记住） | ✅ Mermaid 图（点击放大） |
 | ✅ 复制为富文本（📋 / 命令） | ✅ ECharts |
-| ✅ 粘贴为 markdown（⇧⌘V / 右键） | ✅ Callout 提示块（`> [!NOTE]`） |
+| ✅ 粘贴为 markdown（⇧⌘V / 右键，HTML + 截图） | ✅ Callout 提示块（`> [!NOTE]`） |
 | ✅ 代码块复制按钮 | ✅ `~~删除~~` `==高亮==` `^上标^` `~下标~` |
+| | ✅ 代码块文件名 / 行号 / 高亮行 |
 | ✅ 相对路径图片（`./img/a.png`） | ✅ 任务列表 checkbox 预览点击回写 |
 | ✅ 导出 HTML / PNG / PDF | ✅ 图片点击放大 |
 | ✅ 自定义 CSS 和 favicon | ✅ 零额外依赖 |

@@ -9,6 +9,7 @@ import re
 from urllib.parse import unquote as _unquote
 
 from . import assets as pkg_assets
+from .directives import convert_pagebreaks
 
 _IMG_SRC_RE = re.compile(r'(<img\b[^>]*?\bsrc=["\'])([^"\']+)(["\'])', re.IGNORECASE)
 
@@ -335,6 +336,7 @@ def build_preview_shell(
     custom_css="",
     title="Markdown Preview",
     favicon="",
+    frontmatter=None,
 ):
     """Build the stable shell page (polls /api/content when use_server)."""
     css = _load_asset("preview.css")
@@ -346,6 +348,8 @@ def build_preview_shell(
                 css = css + "\n" + f.read()
         except Exception:
             pass
+
+    banner_html = _frontmatter_banner(frontmatter)
 
     toolbar_html = (
         '<div class="mdpp-toolbar mdpp-toolbar-sidebar">\n'
@@ -419,6 +423,7 @@ def build_preview_shell(
         "</div>\n"
         "<div class=\"mdpp-wrap\">\n"
         "%s\n"
+        "%s\n"
         "<main id=\"mdpp-content\" class=\"markdown-body\">%s</main>\n"
         "</div>\n"
         "%s"
@@ -441,6 +446,7 @@ def build_preview_shell(
         layout_class,
         mode,
         toc_block,
+        banner_html,
         body_html,
         mermaid_tag,
         echarts_tag,
@@ -488,12 +494,16 @@ def build_export_html(
     favicon="",
     embed_images=True,
     embed_warnings=None,
+    frontmatter=None,
 ):
     """Standalone HTML. KaTeX CSS is inlined from vendored assets (no CDN).
 
     embed_images=True 时本地 file:// 图片内嵌为 data: base64 URI;
     读取失败的 src 原样保留并追加到 embed_warnings(若提供)。
     """
+    # Page directives: drop notes, turn pagebreak into a print break.
+    body_html = convert_pagebreaks(body_html)
+    banner_html = _frontmatter_banner(frontmatter)
     if embed_images:
         body_html, _n, failed = embed_local_images(body_html)
         if failed and embed_warnings is not None:
@@ -553,6 +563,7 @@ def build_export_html(
         "<body class=\"%s\">\n"
         "<div class=\"mdpp-wrap\">\n"
         "%s\n"
+        "%s\n"
         "<main class=\"markdown-body\">%s</main>\n"
         "</div>\n"
         "%s"
@@ -587,6 +598,7 @@ def build_export_html(
         hl_css,
         layout_class,
         toc_block,
+        banner_html,
         body_html,
         mermaid_tag,
         echarts_tag,
@@ -636,6 +648,33 @@ def build_clipboard_html(body_html, title="Markdown Preview"):
 def _json(obj):
     import json
     return json.dumps(obj, ensure_ascii=False)
+
+
+def _frontmatter_banner(frontmatter):
+    """Render the title/date/tags line shown above the body, or ``""``."""
+    if not isinstance(frontmatter, dict):
+        return ""
+    title = frontmatter.get("title")
+    date = frontmatter.get("date")
+    tags = frontmatter.get("tags") or []
+    parts = []
+    if title:
+        parts.append(
+            '<span class="mdpp-frontmatter-title">%s</span>'
+            % _escape_html(title))
+    if date:
+        parts.append(
+            '<span class="mdpp-frontmatter-date">%s</span>'
+            % _escape_html(date))
+    if tags:
+        parts.append(
+            '<span class="mdpp-frontmatter-tags">%s</span>'
+            % " ".join(
+                '<span class="mdpp-frontmatter-tag">%s</span>'
+                % _escape_html(str(t)) for t in tags))
+    if not parts:
+        return ""
+    return '<div class="mdpp-frontmatter">%s</div>' % "".join(parts)
 
 
 def _escape_html(s):

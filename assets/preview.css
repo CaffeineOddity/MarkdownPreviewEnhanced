@@ -461,6 +461,137 @@ html[data-mdpp-theme="dark"] .mdpp-code-copy.mdpp-copied {
   .mdpp-code-copy { display: none !important; }
 }
 
+/* ── code block header (title / lang / copy) + line numbers ─────────── */
+.mdpp-code {
+  position: relative;
+  margin: 0 0 1.1em;
+  border: 1px solid var(--mdpp-border-muted);
+  border-radius: var(--mdpp-radius);
+  background: var(--mdpp-pre-bg);
+  box-shadow: var(--mdpp-shadow);
+  overflow: hidden;
+}
+
+.mdpp-code > .codehilite {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.mdpp-code-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--mdpp-border-muted);
+  background: var(--mdpp-surface);
+  font-family: var(--mdpp-mono);
+  font-size: 12px;
+}
+
+.mdpp-code-title {
+  font-weight: 600;
+  color: var(--mdpp-fg);
+}
+
+.mdpp-code-lang {
+  color: var(--mdpp-muted);
+  text-transform: lowercase;
+}
+
+.mdpp-code-header .mdpp-code-copy {
+  position: static;
+  margin-left: auto;
+  opacity: 1;
+}
+
+/* Pygments linenos="table" layout inside .mdpp-code */
+.codehilite table.highlighttable,
+.codehilite table.codehilitetable {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0;
+  border: 0;
+}
+
+.codehilite .linenos {
+  width: 1%;
+  padding: 12px 10px;
+  text-align: right;
+  vertical-align: top;
+  user-select: none;
+  color: var(--mdpp-muted);
+  background: var(--mdpp-surface);
+  border-right: 1px solid var(--mdpp-border-muted);
+}
+
+.codehilite .linenos pre,
+.codehilite .linenodiv pre {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.codehilite .code {
+  vertical-align: top;
+}
+
+/* ── frontmatter title / date / tags banner ─────────────────────────── */
+.mdpp-frontmatter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  padding: 10px 0 6px;
+  margin: 0 0 0.6em;
+  border-bottom: 1px solid var(--mdpp-border-muted);
+  font-size: 14px;
+}
+
+.mdpp-frontmatter-title {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--mdpp-fg);
+}
+
+.mdpp-frontmatter-date {
+  color: var(--mdpp-muted);
+}
+
+.mdpp-frontmatter-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mdpp-frontmatter-tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--mdpp-surface);
+  color: var(--mdpp-muted);
+  font-size: 12px;
+  border: 1px solid var(--mdpp-border-muted);
+}
+
+/* ── manual page break (export / print) ─────────────────────────────── */
+.mdpp-pagebreak {
+  display: block;
+  height: 0;
+  margin: 0;
+  border: 0;
+  visibility: hidden;
+}
+
+@media print {
+  .mdpp-pagebreak {
+    page-break-after: always;
+    break-after: page;
+  }
+}
+
 /* ── quotes / rules / images ──────────────────────────────────────────── */
 .markdown-body blockquote {
   margin: 0 0 1.1em;

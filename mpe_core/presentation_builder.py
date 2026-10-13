@@ -1,16 +1,17 @@
 """Build a presentation (slide deck) page using the normal preview's own
 markdown rendering — no third-party framework.
 
-Slides are the already-rendered body_html split at every h1–h4 heading:
-each heading opens a new slide, and the content under it stays on that
-slide.  Each slide is a plain ``.markdown-body`` page shown full screen,
-one at a time.  Tables, code blocks, quotes, KaTeX, mermaid and echarts
-render *identically* to the live preview because the very same
-preview.css is inlined here.
+Slides are the already-rendered body_html split at every
+``<!-- pagebreak -->`` comment; speaker notes are carried by
+``<!-- notes ... -->`` comments and shown on demand. Each slide is a plain
+``.markdown-body`` page shown full screen, one at a time. Tables, code blocks,
+quotes, KaTeX, mermaid and echarts render *identically* to the live preview
+because the very same preview.css is inlined here.
 """
-import re
+from html import escape
 
 from . import assets as pkg_assets
+from .directives import split_slides
 from .html_builder import _katex_rerender_snippet, _favicon_tag
 
 
@@ -101,6 +102,25 @@ html, body {
   color: inherit;
 }
 .mdpp-hud button:hover { background: var(--mdpp-surface-2); }
+.mdpp-notes {
+  position: absolute;
+  right: 24px;
+  bottom: 56px;
+  max-width: 42%;
+  padding: 12px 16px;
+  background: var(--mdpp-surface);
+  color: var(--mdpp-fg);
+  border: 1px solid var(--mdpp-border);
+  border-radius: 8px;
+  font-size: 15px;
+  line-height: 1.5;
+  z-index: 60;
+  white-space: pre-wrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.mdpp-notes p { margin: 0 0 0.5em; }
+.mdpp-notes p:last-child { margin-bottom: 0; }
+.mdpp-notes[hidden] { display: none; }
 .mdpp-click {
   position: fixed;
   top: 0;
@@ -199,6 +219,10 @@ _DECK_JS = r"""
         prev(); e.preventDefault(); break;
       case "Home": go(0); e.preventDefault(); break;
       case "End": go(slides.length - 1); e.preventDefault(); break;
+      case "n": case "N":
+        var notes = slides[idx].querySelector(".mdpp-notes");
+        if (notes) { notes.hidden = !notes.hidden; }
+        e.preventDefault(); break;
       case "f": case "F":
         if (document.fullscreenElement) { document.exitFullscreen(); }
         else if (document.documentElement.requestFullscreen) {
@@ -216,28 +240,14 @@ _DECK_JS = r"""
 """
 
 
-def _split_slides(body_html):
-    """Split rendered HTML into slides at every heading (h1–h4).
-
-    Each ``<h1>``…``<h4>`` opens a new slide; everything up to the next
-    heading belongs to that slide.  Content before the first heading
-    becomes its own opening slide.  A document without headings renders
-    as a single slide.  Markdown ``---`` still shows as a plain rule
-    inside a slide — it no longer breaks pages.
-    """
-    chunks = re.split(
-        r"(?i)(<h[1-4](?:\s[^>]*)?>)", body_html)
-    slides = []
-    # Leading content before the first heading (title blurb, lists …).
-    if chunks[0].strip():
-        slides.append(chunks[0].strip())
-    for i in range(1, len(chunks) - 1, 2):
-        tag = chunks[i]
-        content = chunks[i + 1].strip() if i + 1 < len(chunks) else ""
-        slides.append((tag + content).strip())
-    if not slides:
-        slides = [body_html.strip() or "<p>No content</p>"]
-    return slides
+def _notes_div(notes):
+    """Render a slide's speaker notes as a hidden corner overlay."""
+    if not notes:
+        return ""
+    return (
+        '<div class="mdpp-notes" hidden>%s</div>'
+        % "\n".join("<p>%s</p>" % escape(n) for n in notes)
+    )
 
 
 def _static_scripts():
@@ -301,10 +311,10 @@ def build_presentation(body_html, title="Presentation", enable_katex=True):
             '"if(window.mdppRenderMathSafe)window.mdppRenderMathSafe();"></script>\n'
         )
 
-    slides = _split_slides(body_html)
+    slides = split_slides(body_html)
     sections = "\n".join(
-        '<div class="mdpp-slide%s"><div class="markdown-body">%s</div></div>'
-        % (" active" if n == 0 else "", s)
+        '<div class="mdpp-slide%s"><div class="markdown-body">%s</div>%s</div>'
+        % (" active" if n == 0 else "", s["html"], _notes_div(s["notes"]))
         for n, s in enumerate(slides)
     )
 

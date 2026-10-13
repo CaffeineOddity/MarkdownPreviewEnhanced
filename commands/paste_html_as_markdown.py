@@ -7,12 +7,14 @@ macOS: osascript `the clipboard as «class HTML»`（返回 «data HTML....» he
 Windows: PowerShell Get-Clipboard -TextFormatType Html（CF_HTML，按头部偏移截取）。
 Linux: xclip -t text/html -o（X11）/ wl-paste --type text/html（Wayland）。
 
-见 specs/paste-html-as-markdown.md。
+见 docs/specs/paste-html-as-markdown.md。
 """
 import binascii
+import os
 import re
 import subprocess
 import threading
+import time
 import zlib
 
 import sublime
@@ -21,6 +23,7 @@ import sublime_plugin
 from ..mpe_core import config
 from ..mpe_core import log
 from ..mpe_core import vendor
+from ..mpe_core.clipboard_image import read_clipboard_image
 
 _HTML_HEX_RE = re.compile(r"«data HTML([0-9A-Fa-f]+)»")
 _CF_HTML_HEADER_RE = re.compile(
@@ -216,6 +219,23 @@ def localize_images(md_text, md_dir, images_dir):
     return "".join(out_parts), ok, fail
 
 
+def persist_clipboard_image(png, md_dir, images_dir_name):
+    """Save clipboard PNG beside the md file; return ``(md_text, saved_path)``."""
+    images_dir = os.path.join(md_dir.rstrip("/") or ".", images_dir_name)
+    os.makedirs(images_dir, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    base = os.path.join(images_dir, "pasted-" + stamp)
+    path = base + ".png"
+    n = 1
+    while os.path.exists(path):
+        path = "%s-%d.png" % (base, n)
+        n += 1
+    with open(path, "wb") as f:
+        f.write(png)
+    rel = (images_dir_name.rstrip("/") + "/" + os.path.basename(path)).replace("\\", "/")
+    return "![](%s)" % rel, path
+
+
 class MarkdownPreviewEnhancedPasteAsMarkdownCommand(sublime_plugin.TextCommand):
     """Paste clipboard HTML as markdown (falls back to plain paste)."""
 
@@ -236,6 +256,37 @@ class MarkdownPreviewEnhancedPasteAsMarkdownCommand(sublime_plugin.TextCommand):
         images_dir_name = config.get("paste_images_dir", "media")
 
         def _work():
+            # 1) 位图（截图）优先：存 media/ 并插相对路径。
+            try:
+                png = read_clipboard_image()
+            except Exception as e:
+                png = None
+                log.error("paste-md: clipboard image read crashed: %s" % e)
+            if png:
+                if not md_dir:
+                    sublime.set_timeout(
+                        lambda: sublime.status_message(
+                            "Paste as markdown: save the file before pasting an image"),
+                        0)
+                    return
+                try:
+                    md_text, saved_path = persist_clipboard_image(
+                        png, md_dir, images_dir_name)
+                except Exception as e:
+                    msg = "Paste as markdown: save image failed: %s" % e
+                    log.error(msg)
+                    sublime.set_timeout(
+                        lambda: sublime.error_message(msg), 0)
+                    return
+                log.info("paste-md: saved clipboard image -> %s" % saved_path)
+                sublime.set_timeout(
+                    lambda: view.run_command(
+                        "markdown_preview_enhanced_insert_text",
+                        {"text": md_text, "status": "Pasted image %s" % saved_path}),
+                    0)
+                return
+
+            # 2) 无位图 → 走既有 HTML→markdown / 纯文本降级。
             try:
                 html, detail = read_clipboard_html()
             except Exception as e:

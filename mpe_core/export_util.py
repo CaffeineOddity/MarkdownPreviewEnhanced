@@ -22,6 +22,9 @@ def _render_standalone(text, base_dir, mermaid_theme, show_toc, enable_katex,
     toc = result["toc_html"] if show_toc else ""
     if base_dir:
         body = rewrite_image_srcs(body, base_dir, mode="file")
+    frontmatter = result.get("frontmatter")
+    if isinstance(frontmatter, dict) and frontmatter.get("title"):
+        title = frontmatter["title"]
     warnings = []
     html = build_export_html(
         body,
@@ -33,6 +36,7 @@ def _render_standalone(text, base_dir, mermaid_theme, show_toc, enable_katex,
         favicon=favicon,
         embed_images=embed_images,
         embed_warnings=warnings,
+        frontmatter=frontmatter,
     )
     for src in warnings:
         log("image not embedded (unreadable): %s" % src)

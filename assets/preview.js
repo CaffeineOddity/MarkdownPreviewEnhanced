@@ -351,7 +351,7 @@
     }, { passive: false });
   }
 
-  // ── task list checkbox 回写（server 模式；见 specs/task-list-checkbox-sync.md）
+  // ── task list checkbox 回写（server 模式；见 docs/specs/task-list-checkbox-sync.md）
 
   function bindTaskToggle() {
     if (bindTaskToggle._bound) return;
@@ -429,7 +429,15 @@
       var btn = ev.target.closest ? ev.target.closest(".mdpp-code-copy") : null;
       if (!btn) return;
 
-      var pre = btn.closest("pre");
+      // The callout header's Copy sits next to the <pre>, not inside it.
+      var wrap = btn.closest(".mdpp-code");
+      var pre;
+      if (wrap) {
+        pre = wrap.querySelector(".code pre, td.code pre")
+          || wrap.querySelector(".codehilite > pre");
+      } else {
+        pre = btn.closest("pre");
+      }
       if (!pre) return;
 
       var clone = pre.cloneNode(true);
@@ -458,6 +466,9 @@
       if (pre.classList.contains("mermaid")) continue;
       if (pre.closest(".mdpp-echarts-wrap")) continue;
       if (pre.classList.contains("mdpp-echarts")) continue;
+      // .mdpp-code already carries a header Copy; line-number gutters are not code.
+      if (pre.closest(".mdpp-code")) continue;
+      if (pre.closest(".linenos") || pre.closest(".linenodiv")) continue;
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "mdpp-code-copy";
