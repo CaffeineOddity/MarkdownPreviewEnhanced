@@ -16,8 +16,8 @@ convert 前已被 stash 成占位符，同样不受影响。
 import re
 import xml.etree.ElementTree as etree
 
-from markdown.extensions import Extension
-from markdown.treeprocessors import Treeprocessor
+from mdpopups.markdown.extensions import Extension
+from mdpopups.markdown.treeprocessors import Treeprocessor
 
 
 # 单遍组合正则。删除线分支要求内容不以 ~ 开头结尾且非空；

@@ -10,6 +10,7 @@ from __future__ import print_function
 
 import json
 import os
+import shutil
 import socket
 import sys
 import tempfile
@@ -35,6 +36,7 @@ from mpe_core.preview_server import (  # noqa: E402
     has_active_sse_connection,
     pin_os_open_file,
     pop_open_docs,
+    pop_task_toggles,
     reset_os_open_pin,
     state,
     update_content,
@@ -76,7 +78,22 @@ def _read_body(sock, headers, rest):
     return body[:need]
 
 
-def _http_get(sock, path, extra_headers=""):
+_AUTH_TOKEN = ""
+
+
+def _with_token(path):
+    """Add the session token the way the plugin's own page does."""
+    if not _AUTH_TOKEN or path.startswith("/assets/"):
+        return path
+    if "token=" in path:
+        return path
+    sep = "&" if "?" in path else "?"
+    return path + sep + "token=" + quote(_AUTH_TOKEN, safe="")
+
+
+def _http_get(sock, path, extra_headers="", auth=True):
+    if auth:
+        path = _with_token(path)
     req = "GET %s HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\n%s\r\n" % (
         path,
         extra_headers,
@@ -87,9 +104,12 @@ def _http_get(sock, path, extra_headers=""):
 class PreviewConnectionTests(unittest.TestCase):
     def setUp(self):
         self.srv = PreviewServer()
+        global _AUTH_TOKEN
         url = self.srv.start(port=18765, log=lambda m: None)
         self.assertIsNotNone(url, "failed to bind preview server")
         self.port = self.srv.port
+        _AUTH_TOKEN = self.srv.token or ""
+        self.assertTrue(_AUTH_TOKEN)
         with state().lock:
             for ch in state().channels.values():
                 ch.sse_queues[:] = []
@@ -104,6 +124,8 @@ class PreviewConnectionTests(unittest.TestCase):
         pop_open_docs()
 
     def tearDown(self):
+        global _AUTH_TOKEN
+        _AUTH_TOKEN = ""
         self.srv.stop()
         tab_manager.reset()
 
@@ -188,13 +210,13 @@ class PreviewConnectionTests(unittest.TestCase):
             try:
                 body = b'{"line":1,"file":""}'
                 req = (
-                    "POST /api/browser_scroll HTTP/1.1\r\n"
+                    "POST %s HTTP/1.1\r\n"
                     "Host: 127.0.0.1\r\n"
                     "Content-Type: application/json\r\n"
                     "Content-Length: %d\r\n"
                     "Connection: keep-alive\r\n"
                     "\r\n"
-                ) % len(body)
+                ) % (_with_token("/api/browser_scroll"), len(body))
                 t0 = time.time()
                 post.sendall(req.encode("ascii") + body)
                 status, headers, rest = _recv_until_headers(post, timeout=2)
@@ -560,7 +582,9 @@ class PreviewConnectionTests(unittest.TestCase):
             opener.close()
         closer = self._connect()
         try:
-            path = "/api/tab_close?file=" + quote("/tmp/a.md", safe="") + "&gen=1"
+            path = _with_token(
+                "/api/tab_close?file=" + quote("/tmp/a.md", safe="") + "&gen=1"
+            )
             req = (
                 "POST %s HTTP/1.1\r\nHost: 127.0.0.1\r\n"
                 "Content-Length: 0\r\nConnection: close\r\n\r\n"
@@ -571,6 +595,314 @@ class PreviewConnectionTests(unittest.TestCase):
         finally:
             closer.close()
         self.assertEqual(tab_manager.live_count(), 0)
+
+    def test_unauthenticated_open_and_shell_are_forbidden(self):
+        fd, path = tempfile.mkstemp(suffix=".md")
+        os.close(fd)
+        pop_open_docs()
+        try:
+            with state().lock:
+                ch = state().channel(path)
+                ch.shell_html = "<html><body>secret-shell</body></html>"
+                ch.body_html = "<p>secret-shell</p>"
+            sock = self._connect()
+            try:
+                _http_get(
+                    sock,
+                    "/api/open_doc?file=" + quote(path, safe=""),
+                    auth=False,
+                )
+                status, headers, rest = _recv_until_headers(sock, timeout=2)
+                body = _read_body(sock, headers, rest)
+                self.assertTrue(status.startswith("HTTP/1.1 403"), status)
+                self.assertNotIn("access-control-allow-origin", headers)
+                self.assertNotIn(b"secret-shell", body)
+            finally:
+                sock.close()
+            self.assertEqual(pop_open_docs(), [])
+
+            sock = self._connect()
+            try:
+                _http_get(sock, "/?file=" + quote(path, safe=""), auth=False)
+                status, headers, rest = _recv_until_headers(sock, timeout=2)
+                body = _read_body(sock, headers, rest)
+                self.assertTrue(status.startswith("HTTP/1.1 403"), status)
+                self.assertNotIn(b"secret-shell", body)
+            finally:
+                sock.close()
+            self.assertEqual(pop_open_docs(), [])
+        finally:
+            os.remove(path)
+
+    def test_cross_site_and_other_port_rejected_even_with_token(self):
+        pop_open_docs()
+        sock = self._connect()
+        try:
+            _http_get(
+                sock,
+                "/api/open_doc?file=" + quote("/tmp/evil-open.md", safe=""),
+                extra_headers=(
+                    "Origin: https://evil.example\r\n"
+                    "Sec-Fetch-Site: cross-site\r\n"
+                ),
+            )
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            self.assertTrue(status.startswith("HTTP/1.1 403"), status)
+            self.assertNotIn("access-control-allow-origin", headers)
+        finally:
+            sock.close()
+        self.assertEqual(pop_open_docs(), [])
+
+        sock = self._connect()
+        try:
+            _http_get(
+                sock,
+                "/api/open_doc?file=" + quote("/tmp/evil-open.md", safe=""),
+                extra_headers=(
+                    "Origin: http://127.0.0.1:9\r\n"
+                    "Sec-Fetch-Site: same-site\r\n"
+                    "Cookie: mpe_token=%s\r\n" % _AUTH_TOKEN
+                ),
+                auth=False,
+            )
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            self.assertTrue(status.startswith("HTTP/1.1 403"), status)
+        finally:
+            sock.close()
+        self.assertEqual(pop_open_docs(), [])
+
+    def test_header_and_cookie_authorize_without_wildcard_cors(self):
+        update_content(
+            "<p>secret-body</p>", "", "", "", None,
+            file_path="/tmp/snap.md",
+        )
+        sock = self._connect()
+        try:
+            _http_get(
+                sock,
+                "/api/snapshot?file=" + quote("/tmp/snap.md"),
+                extra_headers="X-MPE-Token: %s\r\n" % _AUTH_TOKEN,
+                auth=False,
+            )
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            body = _read_body(sock, headers, rest)
+            self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+            self.assertNotIn("access-control-allow-origin", headers)
+            self.assertIn("no-referrer", headers.get("referrer-policy", ""))
+            data = json.loads(body.decode("utf-8"))
+            self.assertEqual(data.get("html"), "<p>secret-body</p>")
+        finally:
+            sock.close()
+
+        sock = self._connect()
+        try:
+            _http_get(
+                sock,
+                "/api/snapshot?file=" + quote("/tmp/snap.md"),
+                extra_headers=(
+                    "Cookie: mpe_token=%s\r\n"
+                    "Origin: http://127.0.0.1:%d\r\n"
+                    "Sec-Fetch-Site: same-origin\r\n"
+                ) % (_AUTH_TOKEN, self.port),
+                auth=False,
+            )
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            body = _read_body(sock, headers, rest)
+            self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+            self.assertEqual(
+                json.loads(body.decode("utf-8")).get("html"),
+                "<p>secret-body</p>",
+            )
+        finally:
+            sock.close()
+
+    def test_task_toggle_requires_auth(self):
+        pop_task_toggles()
+        body = b'{"file":"/tmp/a.md","line":3,"checked":true}'
+        sock = self._connect()
+        try:
+            req = (
+                "POST /api/task_toggle HTTP/1.1\r\n"
+                "Host: 127.0.0.1\r\n"
+                "Content-Type: application/json\r\n"
+                "Content-Length: %d\r\n"
+                "Connection: close\r\n\r\n"
+            ) % len(body)
+            sock.sendall(req.encode("ascii") + body)
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            _read_body(sock, headers, rest)
+            self.assertTrue(status.startswith("HTTP/1.1 403"), status)
+        finally:
+            sock.close()
+        self.assertEqual(pop_task_toggles(), [])
+
+        sock = self._connect()
+        try:
+            req = (
+                "POST %s HTTP/1.1\r\n"
+                "Host: 127.0.0.1\r\n"
+                "Content-Type: application/json\r\n"
+                "Content-Length: %d\r\n"
+                "Connection: close\r\n\r\n"
+            ) % (_with_token("/api/task_toggle"), len(body))
+            sock.sendall(req.encode("ascii") + body)
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            _read_body(sock, headers, rest)
+            self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+        finally:
+            sock.close()
+        self.assertEqual(pop_task_toggles(), [("/tmp/a.md", 3, True)])
+
+    def test_doc_route_blocks_secrets_and_serves_images(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(tmp, ".env"), "w") as handle:
+                handle.write("API_KEY=supersecret")
+            with open(os.path.join(tmp, "notes.txt"), "w") as handle:
+                handle.write("plain-secret")
+            with open(os.path.join(tmp, "pic.png"), "wb") as handle:
+                handle.write(b"\x89PNG\r\n\x1a\n")
+            with state().lock:
+                state().channel(os.path.join(tmp, "doc.md")).doc_dir = tmp
+
+            sock = self._connect()
+            try:
+                _http_get(sock, "/doc/.env", auth=False)
+                status, headers, rest = _recv_until_headers(sock, timeout=2)
+                body = _read_body(sock, headers, rest)
+                self.assertTrue(status.startswith("HTTP/1.1 403"), status)
+                self.assertNotIn(b"supersecret", body)
+            finally:
+                sock.close()
+
+            for rel in ("/doc/.env", "/doc/notes.txt", "/doc/%2e%2e/pic.png"):
+                sock = self._connect()
+                try:
+                    _http_get(sock, rel)
+                    status, headers, rest = _recv_until_headers(sock, timeout=2)
+                    body = _read_body(sock, headers, rest)
+                    self.assertTrue(status.startswith("HTTP/1.1 404"), status + " " + rel)
+                    self.assertNotIn(b"supersecret", body)
+                    self.assertNotIn(b"plain-secret", body)
+                finally:
+                    sock.close()
+
+            sock = self._connect()
+            try:
+                _http_get(sock, "/doc/pic.png")
+                status, headers, rest = _recv_until_headers(sock, timeout=2)
+                body = _read_body(sock, headers, rest)
+                self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+                self.assertIn(b"PNG", body)
+                self.assertNotIn("access-control-allow-origin", headers)
+            finally:
+                sock.close()
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_foreign_host_rejected(self):
+        sock = self._connect()
+        try:
+            req = (
+                "GET /assets/mermaid.min.js HTTP/1.1\r\n"
+                "Host: evil.example\r\n"
+                "Connection: close\r\n\r\n"
+            )
+            sock.sendall(req.encode("ascii"))
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            _read_body(sock, headers, rest)
+            self.assertTrue(status.startswith("HTTP/1.1 403"), status)
+        finally:
+            sock.close()
+
+    def test_preview_of_a_can_open_linked_doc_b(self):
+        """A link in A's preview opens B.
+
+        Left click puts the session token on ``/?file=B``. A plain
+        same-origin navigation (open in new tab) sends only the cookie.
+        Both must queue B for Sublime. A page on another origin must not.
+        """
+        folder = tempfile.mkdtemp()
+        path_a = os.path.join(folder, "a.md")
+        path_b = os.path.join(folder, "b.md")
+        try:
+            for path in (path_a, path_b):
+                with open(path, "w") as handle:
+                    handle.write("# %s\n" % os.path.basename(path))
+                with state().lock:
+                    ch = state().channel(path)
+                    ch.shell_html = "<html><head></head><body>ok</body></html>"
+                    ch.body_html = "<p>ok</p>"
+            pop_open_docs()
+
+            sock = self._connect()
+            try:
+                _http_get(sock, "/?file=" + quote(path_a, safe=""))
+                status, headers, rest = _recv_until_headers(sock, timeout=2)
+                _read_body(sock, headers, rest)
+                self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+                self.assertIn("mpe_token=" + _AUTH_TOKEN, headers.get("set-cookie", ""))
+            finally:
+                sock.close()
+            self.assertEqual(
+                pop_open_docs(),
+                [{"path": path_a, "focus_browser": False}],
+            )
+
+            sock = self._connect()
+            try:
+                _http_get(sock, "/?file=" + quote(path_b, safe=""))
+                status, headers, rest = _recv_until_headers(sock, timeout=2)
+                body = _read_body(sock, headers, rest)
+                self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+                self.assertIn(b"window.MDPP_TOKEN=", body)
+            finally:
+                sock.close()
+            self.assertEqual(
+                pop_open_docs(),
+                [{"path": path_b, "focus_browser": False}],
+            )
+
+            pop_open_docs()
+            sock = self._connect()
+            try:
+                _http_get(
+                    sock,
+                    "/?file=" + quote(path_b, safe=""),
+                    extra_headers=(
+                        "Cookie: mpe_token=%s\r\n"
+                        "Origin: http://127.0.0.1:%d\r\n"
+                        "Sec-Fetch-Site: same-origin\r\n"
+                    ) % (_AUTH_TOKEN, self.port),
+                    auth=False,
+                )
+                status, headers, rest = _recv_until_headers(sock, timeout=2)
+                _read_body(sock, headers, rest)
+                self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+            finally:
+                sock.close()
+            self.assertEqual(
+                pop_open_docs(),
+                [{"path": path_b, "focus_browser": False}],
+            )
+        finally:
+            shutil.rmtree(folder)
+
+    def test_shell_sets_session_cookie_and_page_token(self):
+        sock = self._connect()
+        try:
+            _http_get(sock, "/")
+            status, headers, rest = _recv_until_headers(sock, timeout=2)
+            body = _read_body(sock, headers, rest)
+            self.assertTrue(status.startswith("HTTP/1.1 200"), status)
+            cookie = headers.get("set-cookie", "")
+            self.assertIn("mpe_token=" + _AUTH_TOKEN, cookie)
+            self.assertIn("HttpOnly", cookie)
+            self.assertIn("SameSite=Strict", cookie)
+            self.assertIn(b"window.MDPP_TOKEN=", body)
+            self.assertNotIn("access-control-allow-origin", headers)
+        finally:
+            sock.close()
 
 
 class PreviewTabHintTests(unittest.TestCase):
@@ -592,6 +924,40 @@ class PreviewTabHintTests(unittest.TestCase):
         joined = " ".join(hints)
         self.assertIn("file=%2Ftmp%2Falpha.md", joined)
         self.assertIn("file=/tmp/alpha.md", joined)
+
+    def test_preview_match_hints_drop_auth_token(self):
+        from mpe_core.browser import _preview_match_hints
+
+        hints = _preview_match_hints(
+            "http://127.0.0.1:8765/?file=%2Ftmp%2Falpha.md&token=sekritvalue")
+        joined = " ".join(hints)
+        self.assertNotIn("sekritvalue", joined)
+        self.assertNotIn("token=", joined)
+        self.assertIn("file=%2Ftmp%2Falpha.md", joined)
+        self.assertIn("file=/tmp/alpha.md", joined)
+
+    def test_redact_and_doc_policy(self):
+        from mpe_core.preview_handler import doc_rel_allowed
+        from mpe_core.preview_server import (
+            append_auth_token,
+            redact_auth_text,
+            strip_auth_token,
+        )
+
+        url = append_auth_token("http://127.0.0.1:8765/?file=%2Ftmp%2Fa.md", "abc")
+        self.assertIn("token=abc", url)
+        self.assertNotIn("abc", redact_auth_text("open " + url))
+        self.assertEqual(
+            strip_auth_token(url),
+            "http://127.0.0.1:8765/?file=%2Ftmp%2Fa.md",
+        )
+        self.assertTrue(doc_rel_allowed("pic.png"))
+        self.assertTrue(doc_rel_allowed("sub/notes.md"))
+        self.assertFalse(doc_rel_allowed(".env"))
+        self.assertFalse(doc_rel_allowed("dir/.env"))
+        self.assertFalse(doc_rel_allowed("%2eenv"))
+        self.assertFalse(doc_rel_allowed("id_rsa"))
+        self.assertFalse(doc_rel_allowed("secrets.json"))
 
     def test_focus_script_finds_tab_and_does_not_open(self):
         from mpe_core.browser import BrowserSession, _preview_match_hints

@@ -1,0 +1,6 @@
+MarkdownPreviewEnhanced 0.2.7
+=============================
+
+- fix(preview): 任务勾选经 TextCommand 写回编辑器
+- fix(server): 预览服务校验来源与会话口令
+- chore: restore debug logging on master

@@ -157,14 +157,17 @@ def _escape(s):
 
 
 def _file_key_from_query(query):
-    """从 query 提取频道标识:?file=<编码后的绝对路径>;无则返回 ""。"""
+    """从 query 提取频道标识:?file=<编码后的绝对路径>;无则返回 ""。
+
+    ``token`` 是会话口令,不能被当成路径。只有 token、没有 file 时返回 ""。
+    """
     q = unquote(query or "").strip()
     if not q:
         return ""
     try:
         params = parse_qs(q)
-        if "file" in params and params["file"]:
-            return params["file"][0]
+        if "file" in params or "token" in params:
+            return (params.get("file") or [""])[0]
     except Exception:
         pass
     for prefix in ("file://", "file="):

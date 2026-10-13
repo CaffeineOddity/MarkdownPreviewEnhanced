@@ -16,7 +16,7 @@ import sublime
 
 from . import config
 from . import log
-from .preview_server import SERVER
+from .preview_server import SERVER, append_auth_token
 
 
 # ── internal state ───────────────────────────────────────────────────────────
@@ -270,8 +270,10 @@ def preview_url(file_path=None):
             preview_state.ensure_server()
         if SERVER.running:
             if file_path:
-                return SERVER.base_url + "/?file=" + _quote(file_path, safe="")
-            return SERVER.base_url + "/"
+                url = SERVER.base_url + "/?file=" + _quote(file_path, safe="")
+            else:
+                url = SERVER.base_url + "/"
+            return append_auth_token(url, SERVER.token)
     return "file://" + config.preview_path()
 
 

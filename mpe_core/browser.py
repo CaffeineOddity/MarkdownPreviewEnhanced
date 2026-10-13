@@ -74,6 +74,20 @@ def _matches_preferred(preferred, name):
     return False
 
 
+def _redact_log(text):
+    from .preview_server import redact_auth_text
+    return redact_auth_text(text)
+
+
+def _wrap_log(log):
+    raw = log or (lambda m: None)
+
+    def wrapped(msg):
+        raw(_redact_log(msg))
+
+    return wrapped
+
+
 def _url_hint(url):
     """Short stable substring used to find an existing preview tab."""
     if not url:
@@ -86,9 +100,16 @@ def _url_hint(url):
 
 
 def _preview_match_hints(url):
-    """Same doc may appear as ?file=%2Fabs%2Fa.md or ?file=/abs/a.md."""
+    """Same doc may appear as ?file=%2Fabs%2Fa.md or ?file=/abs/a.md.
+
+    The session token is not part of the match. The address bar drops it
+    after load, and the AppleScript must not contain the secret.
+    """
     from urllib.parse import parse_qs, quote, urlparse
 
+    from .preview_server import strip_auth_token
+
+    url = strip_auth_token(url)
     hints = []
     raw = _url_hint(url)
     if raw:
@@ -147,7 +168,7 @@ class BrowserSession:
         SSE switchTab + window.open('', name).
         """
         self.last_url = url
-        log = log or (lambda m: None)
+        log = _wrap_log(log)
         preferred = (preferred or "auto").lower()
 
         if preferred == "default":
@@ -164,7 +185,7 @@ class BrowserSession:
         macOS: AppleScript walks Chrome/Safari/Edge/Brave tabs by URL.
         Other OS: not supported (returns False); caller must not OS-open.
         """
-        log = log or (lambda m: None)
+        log = _wrap_log(log)
         if not url:
             log("focus existing: no url")
             return False
@@ -349,8 +370,11 @@ class BrowserSession:
         if not as_name:
             log("focus existing: no AppleScript app for %s" % app)
             return False
-        hints = _preview_match_hints(url)
-        url_safe = (url or "").replace('"', "%22")
+        from .preview_server import strip_auth_token
+
+        public = strip_auth_token(url)
+        hints = _preview_match_hints(public)
+        url_safe = (public or "").replace('"', "%22")
         if as_name == "Safari":
             script = self._safari_focus_or_open_script(url_safe, hints, False)
         else:

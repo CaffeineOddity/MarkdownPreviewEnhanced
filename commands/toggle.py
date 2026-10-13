@@ -4,7 +4,11 @@ import sublime_plugin
 
 from ..mpe_core import log
 from ..mpe_core import tab_manager
-from ..mpe_core.preview_server import pin_os_open_file, set_active_doc
+from ..mpe_core.preview_server import (
+    pin_os_open_file,
+    redact_auth_text,
+    set_active_doc,
+)
 from ..mpe_core.preview_state import ensure_server, is_preview_open
 from ..mpe_core.preview_url import focus_preview_tab, open_preview_browser
 from ..mpe_core.render import render_view
@@ -43,5 +47,6 @@ class MarkdownPreviewEnhancedToggleCommand(sublime_plugin.WindowCommand):
             pin_os_open_file(fp)
         render_view(view, force=True, open_browser=False)
         url = tab_manager.preview_url(fp)
-        log.info("toggle: open path -> ensure_server + open_browser url=%s" % url)
+        log.info("toggle: open path -> ensure_server + open_browser url=%s"
+                 % redact_auth_text(url))
         open_preview_browser(url, True)

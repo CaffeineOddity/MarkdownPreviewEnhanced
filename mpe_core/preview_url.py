@@ -17,6 +17,7 @@ from . import log
 from .browser import BrowserSession
 from . import preview_state
 from . import tab_manager
+from .preview_server import redact_auth_text
 
 _browser = BrowserSession()
 
@@ -29,7 +30,8 @@ def open_preview_browser(url, focus_existing):
     """
     preview_state.mark_browser_open()
     preferred = config.get("browser", "auto") or "auto"
-    log.debug("browser open: focus_existing=%s url=%s" % (focus_existing, url))
+    log.debug("browser open: focus_existing=%s url=%s" % (
+        focus_existing, redact_auth_text(url)))
 
     def _work():
         try:
@@ -40,7 +42,7 @@ def open_preview_browser(url, focus_existing):
                 focus_existing=focus_existing,
             )
             if not ok:
-                log.error("browser open returned False: %s" % url)
+                log.error("browser open returned False: %s" % redact_auth_text(url))
         except Exception as e:
             log.error("browser open failed: %s" % e)
 
@@ -57,13 +59,13 @@ def focus_preview_tab(file_path):
     if not file_path:
         return
     url = tab_manager.preview_url(file_path)
-    log.debug("focus existing preview tab: %s" % url)
+    log.debug("focus existing preview tab: %s" % redact_auth_text(url))
 
     def _work():
         try:
             ok = _browser.focus_existing_tab(url, log=preview_state.browser_log)
             if not ok:
-                log.info("focus existing tab missed - opening new: %s" % url)
+                log.info("focus existing tab missed - opening new: %s" % redact_auth_text(url))
                 open_preview_browser(url, focus_existing=False)
         except Exception as e:
             log.error("focus existing tab failed: %s" % e)

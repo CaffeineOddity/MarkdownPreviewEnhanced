@@ -2,11 +2,12 @@
 """Test runner for MarkdownPreviewEnhanced.
 
 Works outside Sublime: injects a `sublime` stub, points md_renderer's
-markdown import at the mdpopups dependency installed under ST's Lib/python38,
+markdown import at the mdpopups dependency installed under ST's Lib/python3*,
 then discovers tests in tests/.
 
 Usage: python3 tests/run_all.py
 """
+import importlib.util
 import os
 import sys
 import types
@@ -41,25 +42,59 @@ if "sublime_plugin" not in sys.modules:
     sys.modules["sublime_plugin"] = _sp
 
 # ── markdown from mdpopups (bypasses mdpopups/__init__ which needs ST) ──────
-_MDPOPUPS_DIR = os.path.expanduser(
-    "~/Library/Application Support/Sublime Text/Lib/python38/mdpopups")
+def _find_mdpopups():
+    """探测 ST <data>/Lib/python3*/mdpopups，优先最新解释器版本。"""
+    import glob
+    import re
+    roots = [
+        os.path.expanduser("~/Library/Application Support/Sublime Text/Lib"),
+        os.path.join(os.environ.get("APPDATA", ""), "Sublime Text", "Lib"),
+        os.path.expanduser("~/.config/sublime-text/Lib"),
+    ]
+    for env_var in ("SUBLIME_PACKAGES", "XDG_DATA_HOME"):
+        base = os.environ.get(env_var)
+        if base:
+            roots.append(os.path.join(base, "..", "Lib"))
+    hits = []
+    for root in roots:
+        if not root or not os.path.isdir(root):
+            continue
+        for sub in glob.glob(os.path.join(root, "python3*")):
+            md = os.path.join(sub, "mdpopups")
+            if not os.path.isdir(md):
+                continue
+            m = re.match(r"python(\d+)", os.path.basename(sub))
+            hits.append((int(m.group(1)) if m else 0, md))
+    hits.sort(reverse=True)
+    return hits[0][1] if hits else None
 
 
 def _inject_markdown():
-    if not os.path.isdir(_MDPOPUPS_DIR):
-        print("mdpopups not found at %s; render tests will skip" % _MDPOPUPS_DIR)
+    mdpopups_dir = _find_mdpopups()
+    if not mdpopups_dir:
+        print("mdpopups not found under ST Lib/python3*; render tests will skip")
         return
-    if _MDPOPUPS_DIR not in sys.path:
-        sys.path.insert(0, _MDPOPUPS_DIR)
     try:
-        import markdown
-        import markdown.extensions.attr_list as attr_list
-        import markdown.extensions.codehilite as codehilite
-        import markdown.extensions.fenced_code as fenced_code
-        import markdown.extensions.footnotes as footnotes
-        import markdown.extensions.nl2br as nl2br
-        import markdown.extensions.tables as tables
-        import markdown.extensions.toc as toc
+        mdpopups = types.ModuleType("mdpopups")
+        mdpopups.__path__ = [mdpopups_dir]
+        sys.modules["mdpopups"] = mdpopups
+        markdown_dir = os.path.join(mdpopups_dir, "markdown")
+        spec = importlib.util.spec_from_file_location(
+            "mdpopups.markdown",
+            os.path.join(markdown_dir, "__init__.py"),
+            submodule_search_locations=[markdown_dir],
+        )
+        markdown = importlib.util.module_from_spec(spec)
+        sys.modules["mdpopups.markdown"] = markdown
+        mdpopups.markdown = markdown
+        spec.loader.exec_module(markdown)
+        import mdpopups.markdown.extensions.attr_list as attr_list
+        import mdpopups.markdown.extensions.codehilite as codehilite
+        import mdpopups.markdown.extensions.fenced_code as fenced_code
+        import mdpopups.markdown.extensions.footnotes as footnotes
+        import mdpopups.markdown.extensions.nl2br as nl2br
+        import mdpopups.markdown.extensions.tables as tables
+        import mdpopups.markdown.extensions.toc as toc
     except Exception as e:
         print("markdown import failed (%s); render tests will skip" % e)
         return

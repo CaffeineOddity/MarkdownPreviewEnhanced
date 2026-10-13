@@ -252,12 +252,13 @@ def _task_toggle_new_text(line_text, checked):
     return m.group(1) + mark + m.group(3) + line_text[m.end():]
 
 
-def _apply_task_toggle_edit(view, line, checked):
+def _apply_task_toggle_edit(view, edit, line, checked):
     """把 *view* 中 1-based *line* 行的任务标记替换为 *checked* 状态。
 
+    必须在 TextCommand 里调用：``view.replace`` 需要这次 ``run`` 的 edit。
     行内容不再是任务项（文件已改、行号漂移）时静默跳过。
     """
-    if view is None or line < 1:
+    if view is None or edit is None or line < 1:
         return
     try:
         line_pt = view.text_point(line - 1, 0)
@@ -272,9 +273,25 @@ def _apply_task_toggle_edit(view, line, checked):
         mark_start = line_region.begin() + m.start(2)
         mark_end = line_region.begin() + m.end(2)
         view.replace(
-            sublime.Region(mark_start, mark_end), "x" if checked else " ")
+            edit, sublime.Region(mark_start, mark_end),
+            "x" if checked else " ")
+        log.debug("task_toggle applied line=%d checked=%s" % (line, checked))
     except Exception as e:
-        log.debug("task_toggle edit failed line=%d: %s" % (line, e))
+        log.error("task_toggle edit failed line=%d: %s" % (line, e))
+
+
+def _dispatch_task_toggle(file_key, view_id, line, checked):
+    """在主线程用 TextCommand 写回。直接 view.replace 没有 edit，会被 ST 拒绝。"""
+    view = _find_markdown_view(view_id) if view_id else None
+    if view is None:
+        view = tab_manager.find_view_by_file(file_key)
+    if view is None:
+        log.debug("task_toggle skipped: no view file=%s line=%d" % (file_key, line))
+        return
+    view.run_command(
+        "markdown_preview_enhanced_task_toggle",
+        {"line": int(line), "checked": bool(checked)},
+    )
 
 
 def _find_markdown_view(view_id):
@@ -376,9 +393,8 @@ def start_scroll_poller():
             for file_key, line, checked in toggles:
                 view_id = tab_manager.get_view_id_for_file(file_key)
                 sublime.set_timeout(
-                    lambda vl=view_id, l=line, c=checked: (
-                        _apply_task_toggle_edit(
-                            _find_markdown_view(vl), l, c)), 0
+                    lambda fk=file_key, vl=view_id, l=line, c=checked: (
+                        _dispatch_task_toggle(fk, vl, l, c)), 0
                 )
         except Exception:
             pass

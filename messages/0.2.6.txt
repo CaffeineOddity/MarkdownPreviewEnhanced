@@ -1,0 +1,6 @@
+MarkdownPreviewEnhanced 0.2.6
+=============================
+
+- fix(deps): mdpopups fallback 探测 Lib/python3* 兼容 ST 4213
+- fix(zoom): 修复图片放大后无法拖动平移
+- chore: restore debug logging on master

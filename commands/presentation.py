@@ -7,7 +7,7 @@ import sublime_plugin
 
 from ..mpe_core import config
 from ..mpe_core import log
-from ..mpe_core.preview_server import SERVER
+from ..mpe_core.preview_server import SERVER, append_auth_token, redact_auth_text
 from ..mpe_core.preview_state import ensure_server
 from ..mpe_core.preview_url import open_preview_browser
 from ..mpe_core.render import render_view
@@ -42,8 +42,9 @@ class MarkdownPreviewEnhancedPresentationCommand(sublime_plugin.WindowCommand):
                 url = SERVER.base_url + "/presentation"
                 if fp:
                     url += "?file=" + _quote(fp, safe="")
+                url = append_auth_token(url, SERVER.token)
                 open_preview_browser(url, False)
-                log.info("presentation: %s" % url)
+                log.info("presentation: %s" % redact_auth_text(url))
                 self.window.status_message(
                     "MarkdownPreviewEnhanced: presentation opened")
 
