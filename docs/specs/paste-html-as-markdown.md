@@ -72,7 +72,7 @@
 
 ## 涉及文件
 
-- `specs/paste-html-as-markdown.md`（本文件）
+- `docs/specs/paste-html-as-markdown.md`（本文件）
 - `mpe_core/_vendor/`（markdownify + bs4 + soupsieve，均 MIT，版本见上文锁定）
 - `commands/paste_html_as_markdown.py`（新命令）
 - `commands/__init__.py`（导出新命令）

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""导出 HTML 本地图片 base64 内嵌 (specs/export-base64-images.md)."""
+"""导出 HTML 本地图片 base64 内嵌 (docs/specs/export-base64-images.md)."""
 from __future__ import print_function
 
 import base64
