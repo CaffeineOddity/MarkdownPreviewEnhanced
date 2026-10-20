@@ -40,30 +40,12 @@
         }
     },
     {
-        "caption": "Preferences: MarkdownPreviewEnhanced Key Bindings (macOS)",
+        "caption": "Preferences: MarkdownPreviewEnhanced Key Bindings",
         "command": "edit_settings",
         "args": {
-            "base_file": "${packages}/MarkdownPreviewEnhanced/keybindings/Default (OSX).sublime-keymap",
-            "user_file": "${packages}/User/Default (OSX).sublime-keymap",
-            "default": "[\n]\n"
-        }
-    },
-    {
-        "caption": "Preferences: MarkdownPreviewEnhanced Key Bindings (Windows)",
-        "command": "edit_settings",
-        "args": {
-            "base_file": "${packages}/MarkdownPreviewEnhanced/keybindings/Default (Windows).sublime-keymap",
-            "user_file": "${packages}/User/Default (Windows).sublime-keymap",
-            "default": "[\n]\n"
-        }
-    },
-    {
-        "caption": "Preferences: MarkdownPreviewEnhanced Key Bindings (Linux)",
-        "command": "edit_settings",
-        "args": {
-            "base_file": "${packages}/MarkdownPreviewEnhanced/keybindings/Default (Linux).sublime-keymap",
-            "user_file": "${packages}/User/Default (Linux).sublime-keymap",
-            "default": "[\n]\n"
+            "base_file": "${packages}/MarkdownPreviewEnhanced/Default.sublime-keymap",
+            "user_file": "${packages}/User/Default ($platform).sublime-keymap",
+            "default": "[\n\t$0\n]\n"
         }
     },
 ]

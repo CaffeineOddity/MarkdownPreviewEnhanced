@@ -35,45 +35,34 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 
 ## 用法
 
-打开 `.md` 文件后，从命令面板运行 **MarkdownPreviewEnhanced: Toggle Preview** 打开 / 聚焦预览。本包**不默认绑定任何快捷键**（不覆盖 Sublime 内置快捷键 —— issue #11）；需要快捷键见下方 [快捷键](#快捷键)。
+打开 `.md` 文件后，从命令面板运行 **MarkdownPreviewEnhanced: Toggle Preview** 打开 / 聚焦预览。本包**不默认绑定任何快捷键**（不覆盖 Sublime 内置快捷键 —— [issue #11](https://github.com/CaffeineOddity/MarkdownPreviewEnhanced/issues/11)）；需要快捷键见下方 [快捷键](#快捷键)。
 
-### 粘贴为 markdown
-
-从网页复制内容后，在 `.md` 文件里右键 -> **Paste as Markdown**，或从命令面板运行 **MarkdownPreviewEnhanced: Paste as Markdown**。剪贴板的 HTML 会被转为 markdown（标题、粗体斜体、链接、列表、代码块、GFM 表格）并插入光标处。如果剪贴板没有 HTML（比如从终端复制的纯文本），会自动降级为普通粘贴。Linux 上需要 `xclip` 或 `wl-clipboard`。设置 `paste_download_images` 为 `true` 可把远程图片下载到 `media/`（默认关闭）。
-
-编辑时浏览器原地更新（SSE），滚动位置保留。再按一次快捷键会聚焦已有标签，不会再叠一张。浏览器里切预览 tab，Sublime 会切到对应 view，反过来也一样。
-
-把已有预览 URL 粘到新标签时，会接管该文件的旧会话（Chrome 对「自己新建再粘贴」的标签可能不让脚本关，旧页会提示你手动关）。只要还有预览 tab 开着，本地服务器就保持；全部关掉后很快停服。
-
-预览侧栏工具条：📋 复制为富文本，🖼️ 导出 PNG，💾 导出独立 HTML，📽️ 演示模式，🌙 / ☀️ 暗色模式，☕ tip。
-
-鼠标悬停预览里的代码块会出现 **Copy** 按钮，一键复制代码原文。**复制为富文本**把渲染后的 HTML 放进剪贴板（浏览器按钮，或命令面板里的 **MarkdownPreviewEnhanced: Copy as Rich Text**），可直接粘贴进邮件、Word、Confluence 并保留样式。Linux 上编辑器命令需要 `xclip` 或 `wl-copy`；浏览器按钮不受此限制。
-
-暗色模式默认跟随系统，点过一次后记在浏览器里。暗色下 Mermaid 用暗色主题。点击 Mermaid 图进入放大（拖动平移、滚轮缩放、`Esc` 关闭）。在 Sublime 里点某一行，预览会把对应块滚到窗口中间（Mermaid 围栏里的行也会对上图里的位置）。
-
-预览里的普通图片点击也可进入同样的放大层。GFM 任务列表的 checkbox 可以直接点击：勾选状态会回写源文件（`- [ ]` / `- [x]`，本地服务器模式）。GitHub 风格 callout（`> [!NOTE]` / `TIP` / `IMPORTANT` / `WARNING` / `CAUTION`，类型后可跟自定义标题）、删除线 `~~文本~~`、高亮 `==文本==`、上标 `^文本^`、下标 `~文本~` 在预览与导出中均可渲染。
+- **粘贴为 markdown**（右键或命令面板）把剪贴板 HTML 转为 markdown（标题、粗斜体、链接、列表、代码块、GFM 表格）；无 HTML 则降级为普通粘贴。Linux 需 `xclip` / `wl-clipboard`。设 `paste_download_images` 为 `true` 可把远程图片存到 `media/`。
+- 编辑时浏览器原地更新（SSE），滚动位置保留。再按一次命令聚焦已有标签。浏览器切预览 tab ↔ Sublime 切 view。只要还有预览 tab，本地服务器就保持；全关后很快停服。
+- 侧栏工具条：📋 复制为富文本、🖼️ PNG、💾 独立 HTML、📽️ 演示、🌙/☀️ 暗色、☕ tip。
+- 悬停代码块出现 **Copy** 按钮。**复制为富文本**把渲染 HTML 放剪贴板（浏览器按钮或命令面板），可粘贴进邮件 / Word / Confluence。
+- 暗色默认跟随系统，切换后记在浏览器。点击 Mermaid 图或图片放大。在 Sublime 点某行，预览滚到对应块中间。
+- GFM 任务列表 checkbox 可点击并回写源文件。Callout（`> [!NOTE]` / `TIP` / `IMPORTANT` / `WARNING` / `CAUTION`）、`~~删除~~`、`==高亮==`、`^上标^`、`~下标~` 在预览与导出中均可渲染。
 
 ### 演示模式
 
-点 📽️ 或命令 **MarkdownPreviewEnhanced: Presentation Mode**。幻灯片用的就是实时预览同一套渲染（标题、代码、表格、KaTeX、Mermaid、ECharts）。每个 `h1`–`h4` 开一页。方向键、左右边缘点击或右下角 HUD 翻页。画布 16:9，按窗口缩放。
+📽️ 或命令 **MarkdownPreviewEnhanced: Presentation Mode**。幻灯片复用实时预览渲染；每个 `h1`–`h4` 开一页。16:9 画布，方向键 / 边缘点击 / HUD 翻页。
 
 ## 快捷键
 
-本包**不默认绑定任何快捷键** —— 插件不应占用 Sublime 内置的快捷键（issue #11）。需要的话请自行绑定：
+本包**不默认绑定任何快捷键**（issue #11），需要请自行绑定：
 
-- 命令面板 → **Preferences: MarkdownPreviewEnhanced Key Bindings (macOS / Windows / Linux)** 打开双栏视图：左栏是示例 keymap，右栏是你的 `User/Default (<平台>).sublime-keymap`；保存右栏立即生效。
-- 或打开 **Preferences → Key Bindings**，把下面的条目粘到右栏 `User` 区。
-
-示例（macOS；Windows / Linux 把 `super` 换成 `ctrl`）。注意 `super+shift+m` 会覆盖 Sublime 内置的 **Expand Selection to Brackets**，`super+shift+v` 会覆盖 **Paste and Indent** —— 如果你用到这两个内置键，请换别的键。
+- 命令面板 → **Preferences: MarkdownPreviewEnhanced Key Bindings** 打开双栏视图：左栏示例、右栏 `User` keymap；保存右栏生效。
+- 或粘到 `User` keymap：
 
 ```json
 [
-    { "keys": ["super+shift+m"], "command": "markdown_preview_enhanced_toggle" },
-    { "keys": ["super+shift+v"], "command": "markdown_preview_enhanced_paste_as_markdown" }
+    { "keys": ["super+alt+m"], "command": "markdown_preview_enhanced_toggle" },
+    { "keys": ["super+alt+v"], "command": "markdown_preview_enhanced_paste_as_markdown" }
 ]
 ```
 
-其余命令（关闭 / 刷新 / 演示模式 / 导出 HTML / 导出 PDF / 复制为富文本）也可在命令面板 `MarkdownPreviewEnhanced:` 前缀下找到。
+Windows / Linux 把 `super` 换成 `ctrl`。`super+alt` / `ctrl+alt` 避开了内置 **Expand Selection to Brackets** / **Paste and Indent**（它们占着 `super+shift+m` / `super+shift+v`）。其余命令在命令面板 `MarkdownPreviewEnhanced:` 前缀下。
 
 ## 设置
 

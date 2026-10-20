@@ -35,45 +35,34 @@ Or clone this repo to `Packages/MarkdownPreviewEnhanced/` (repo root = package r
 
 ## Usage
 
-Open a `.md` file, then run **MarkdownPreviewEnhanced: Toggle Preview** from the Command Palette to open / focus the preview. The package ships **no default key bindings** (so it never overrides Sublime's built-in shortcuts — issue #11); see [Key bindings](#key-bindings) below to add your own.
+Open a `.md` file and run **MarkdownPreviewEnhanced: Toggle Preview** to open / focus the preview. The package ships **no default key bindings** (so it never overrides Sublime's built-in shortcuts — issue #11); see [Key bindings](#key-bindings).
 
-### Paste as markdown
-
-Copy content from a web page, then in a `.md` file right-click -> **Paste as Markdown**, or run **MarkdownPreviewEnhanced: Paste as Markdown** from the Command Palette. The clipboard HTML is converted to markdown (headings, bold/italic, links, lists, code blocks, GFM tables) and inserted at the cursor. If the clipboard has no HTML (e.g. plain text copied from a terminal), it falls back to a normal paste. On Linux the command needs `xclip` or `wl-clipboard`. Set `paste_download_images` to `true` to download remote images locally into `media/` (off by default).
-
-Edit the file — the browser updates in place (SSE), scroll is kept. Press the shortcut again to focus the existing tab (does not stack another tab). Switching a preview tab in the browser focuses the matching Sublime view, and the other way around.
-
-If you paste a preview URL into a new browser tab, the old tab for that file is replaced (Chrome may block `window.close()` on tabs you created yourself; those show a banner instead). The local server stays up while any preview tab is open, and stops shortly after the last one closes.
-
-Preview sidebar toolbar: 📋 copy as rich text, 🖼️ PNG snapshot, 💾 standalone HTML, 📽️ presentation, 🌙 / ☀️ dark mode, ☕ tip.
-
-Hover any code block in the preview for a **Copy** button. **Copy as rich text** puts the rendered HTML on the clipboard (browser button, or `MarkdownPreviewEnhanced: Copy as Rich Text` in the Command Palette) so it can be pasted into mail, Word, or Confluence with styling intact. On Linux the command needs `xclip` or `wl-copy`; the browser button works everywhere.
-
-Dark mode follows `prefers-color-scheme` until you toggle it; the choice is stored in the browser. Mermaid uses its `dark` theme with the page. Click a Mermaid diagram to enlarge it (drag to pan, scroll wheel to zoom, `Esc` to close). Clicking a line in Sublime scrolls that block to the middle of the preview (including lines inside a Mermaid fence).
-
-Plain images in the preview open the same zoom overlay on click. GFM task-list checkboxes are clickable: toggling one writes `- [ ]` / `- [x]` back to the file (local-server mode). GitHub-style callouts (`> [!NOTE]` / `TIP` / `IMPORTANT` / `WARNING` / `CAUTION`, optional custom title after the type), strikethrough `~~text~~`, highlight `==text==`, superscript `^text^` and subscript `~text~` render in preview and exports.
+- **Paste as Markdown** (right-click or Command Palette) converts clipboard HTML to markdown (headings, bold/italic, links, lists, code blocks, GFM tables); no HTML → plain paste. Linux needs `xclip` / `wl-clipboard`. Set `paste_download_images` to `true` to save remote images into `media/`.
+- Editing updates the preview in place (SSE), scroll kept. Re-running the command focuses the existing tab. Switching tabs in the browser focuses the matching Sublime view, and vice versa. The local server stays up while any preview tab is open and stops shortly after the last one closes.
+- Sidebar toolbar: 📋 copy as rich text, 🖼️ PNG, 💾 standalone HTML, 📽️ presentation, 🌙/☀️ dark mode, ☕ tip.
+- Hover a code block for a **Copy** button. **Copy as Rich Text** copies the rendered HTML to the clipboard (browser button or Command Palette) for mail / Word / Confluence.
+- Dark mode follows `prefers-color-scheme`; the choice is stored in the browser. Click a Mermaid diagram or image to zoom. Clicking a line in Sublime scrolls the matching block to the middle of the preview.
+- GFM task-list checkboxes are clickable and write back to the file. Callouts (`> [!NOTE]` / `TIP` / `IMPORTANT` / `WARNING` / `CAUTION`), `~~del~~`, `==mark==`, `^sup^`, `~sub~` render in preview and exports.
 
 ### Presentation mode
 
-Open from the 📽️ button or **MarkdownPreviewEnhanced: Presentation Mode**. Slides are built from the same rendered HTML as live preview (headings, code, tables, KaTeX, Mermaid, ECharts). A new slide starts at every `h1`–`h4`. Navigate with arrow keys, click the left/right edges, or the HUD. Canvas is 16:9, scaled to the window.
+📽️ or **MarkdownPreviewEnhanced: Presentation Mode**. Slides reuse the live-preview HTML; every `h1`–`h4` starts a new slide. 16:9 canvas; navigate with arrow keys, edge click, or the HUD.
 
 ## Key bindings
 
-The package ships **no default key bindings** — a plugin should not shadow Sublime's built-in shortcuts (issue #11). Bind the commands yourself if you want them:
+The package ships **no default key bindings** (issue #11). Bind them yourself:
 
-- Command Palette → **Preferences: MarkdownPreviewEnhanced Key Bindings (macOS / Windows / Linux)** opens a two-pane view: the example keymap on the left, your `User/Default (<platform>).sublime-keymap` on the right. Saving the right pane takes effect immediately.
-- Or open **Preferences → Key Bindings** and paste the entries below into the right-hand `User` pane.
-
-Example (macOS; use `ctrl` in place of `super` on Windows / Linux). Note that `super+shift+m` overrides Sublime's **Expand Selection to Brackets** and `super+shift+v` overrides **Paste and Indent** — pick different keys if you use those.
+- Command Palette → **Preferences: MarkdownPreviewEnhanced Key Bindings** opens a two-pane editor: the example on the left, your `User` keymap on the right. Save the right pane to apply.
+- Or paste into the `User` keymap:
 
 ```json
 [
-    { "keys": ["super+shift+m"], "command": "markdown_preview_enhanced_toggle" },
-    { "keys": ["super+shift+v"], "command": "markdown_preview_enhanced_paste_as_markdown" }
+    { "keys": ["super+alt+m"], "command": "markdown_preview_enhanced_toggle" },
+    { "keys": ["super+alt+v"], "command": "markdown_preview_enhanced_paste_as_markdown" }
 ]
 ```
 
-The other commands (Close / Refresh / Presentation Mode / Export HTML / Export PDF / Copy as Rich Text) are also reachable from the Command Palette under the `MarkdownPreviewEnhanced:` prefix.
+Use `ctrl` instead of `super` on Windows / Linux. `super+alt` / `ctrl+alt` avoid the built-in **Expand Selection to Brackets** / **Paste and Indent** (which sit on `super+shift+m` / `super+shift+v`). Other commands live under the `MarkdownPreviewEnhanced:` prefix.
 
 ## Settings
 
