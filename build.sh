@@ -410,10 +410,13 @@ install_zip() {
     if [ -f "$pc_settings" ]; then
         if grep -q "\"${PKG_NAME}\"" "$pc_settings" 2>/dev/null; then
             "${PYTHON:-python3}" - "$pc_settings" "$PKG_NAME" <<'PYEOF'
-import json, sys
+import json, re, sys
 path, pkg = sys.argv[1], sys.argv[2]
 with open(path, "r", encoding="utf-8") as f:
-    data = json.loads(f.read())
+    raw = f.read()
+# Sublime settings files allow trailing commas (JSONC); strip them for strict json.loads.
+raw = re.sub(r",(\s*[\]}])", r"\1", raw)
+data = json.loads(raw)
 lst = data.get("installed_packages", [])
 if pkg not in lst:
     print("  PC settings OK: %s not in installed_packages" % pkg)
