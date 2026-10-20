@@ -19,7 +19,7 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 | ✅ 演示模式（16:9 幻灯片，分页 + 备注） | ✅ KaTeX（`$…$` / `$$…$$`） |
 | ✅ 暗色模式（跟随系统，可记住） | ✅ Mermaid 图（点击放大） |
 | ✅ 复制为富文本（📋 / 命令） | ✅ ECharts |
-| ✅ 粘贴为 markdown（⇧⌘V / 右键，HTML + 截图） | ✅ Callout 提示块（`> [!NOTE]`） |
+| ✅ 粘贴为 markdown（右键 / 命令，HTML + 截图） | ✅ Callout 提示块（`> [!NOTE]`） |
 | ✅ 代码块复制按钮 | ✅ `~~删除~~` `==高亮==` `^上标^` `~下标~` |
 | | ✅ 代码块文件名 / 行号 / 高亮行 |
 | ✅ 相对路径图片（`./img/a.png`） | ✅ 任务列表 checkbox 预览点击回写 |
@@ -35,13 +35,11 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 
 ## 用法
 
-打开 `.md` 文件后按 `Cmd+Shift+M`（Windows / Linux：`Ctrl+Shift+M`）打开 / 聚焦预览。
-
-这是唯一的另一个默认快捷键（issue #6 -- 不覆盖系统常用快捷键）。关闭、刷新、演示模式、导出 HTML / PDF 都在命令面板里；需要快捷键可在 `User/Default (OSX).sublime-keymap` 自行绑定。
+打开 `.md` 文件后，从命令面板运行 **MarkdownPreviewEnhanced: Toggle Preview** 打开 / 聚焦预览。本包**不默认绑定任何快捷键**（不覆盖 Sublime 内置快捷键 —— issue #11）；需要快捷键见下方 [快捷键](#快捷键)。
 
 ### 粘贴为 markdown
 
-从网页复制内容后，在 `.md` 文件里按 `Cmd+Shift+V`（Windows / Linux：`Ctrl+Shift+V`）或右键 -> **Paste as Markdown**。剪贴板的 HTML 会被转为 markdown（标题、粗体斜体、链接、列表、代码块、GFM 表格）并插入光标处。如果剪贴板没有 HTML（比如从终端复制的纯文本），会自动降级为普通粘贴。Linux 上需要 `xclip` 或 `wl-clipboard`。设置 `paste_download_images` 为 `true` 可把远程图片下载到 `media/`（默认关闭）。
+从网页复制内容后，在 `.md` 文件里右键 -> **Paste as Markdown**，或从命令面板运行 **MarkdownPreviewEnhanced: Paste as Markdown**。剪贴板的 HTML 会被转为 markdown（标题、粗体斜体、链接、列表、代码块、GFM 表格）并插入光标处。如果剪贴板没有 HTML（比如从终端复制的纯文本），会自动降级为普通粘贴。Linux 上需要 `xclip` 或 `wl-clipboard`。设置 `paste_download_images` 为 `true` 可把远程图片下载到 `media/`（默认关闭）。
 
 编辑时浏览器原地更新（SSE），滚动位置保留。再按一次快捷键会聚焦已有标签，不会再叠一张。浏览器里切预览 tab，Sublime 会切到对应 view，反过来也一样。
 
@@ -58,6 +56,24 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 ### 演示模式
 
 点 📽️ 或命令 **MarkdownPreviewEnhanced: Presentation Mode**。幻灯片用的就是实时预览同一套渲染（标题、代码、表格、KaTeX、Mermaid、ECharts）。每个 `h1`–`h4` 开一页。方向键、左右边缘点击或右下角 HUD 翻页。画布 16:9，按窗口缩放。
+
+## 快捷键
+
+本包**不默认绑定任何快捷键** —— 插件不应占用 Sublime 内置的快捷键（issue #11）。需要的话请自行绑定：
+
+- 命令面板 → **Preferences: MarkdownPreviewEnhanced Key Bindings (macOS / Windows / Linux)** 打开双栏视图：左栏是示例 keymap，右栏是你的 `User/Default (<平台>).sublime-keymap`；保存右栏立即生效。
+- 或打开 **Preferences → Key Bindings**，把下面的条目粘到右栏 `User` 区。
+
+示例（macOS；Windows / Linux 把 `super` 换成 `ctrl`）。注意 `super+shift+m` 会覆盖 Sublime 内置的 **Expand Selection to Brackets**，`super+shift+v` 会覆盖 **Paste and Indent** —— 如果你用到这两个内置键，请换别的键。
+
+```json
+[
+    { "keys": ["super+shift+m"], "command": "markdown_preview_enhanced_toggle" },
+    { "keys": ["super+shift+v"], "command": "markdown_preview_enhanced_paste_as_markdown" }
+]
+```
+
+其余命令（关闭 / 刷新 / 演示模式 / 导出 HTML / 导出 PDF / 复制为富文本）也可在命令面板 `MarkdownPreviewEnhanced:` 前缀下找到。
 
 ## 设置
 

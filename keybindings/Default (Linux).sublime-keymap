@@ -1,0 +1,15 @@
+[
+    // MarkdownPreviewEnhanced 示例键位 —— Linux。
+    // 本包默认不绑定任何快捷键。把此文件内容复制到
+    // User/Default (Linux).sublime-keymap 才会生效，或用命令面板
+    // "Preferences: MarkdownPreviewEnhanced Key Bindings (Linux)" 打开编辑。
+    //
+    // 注意：ctrl+shift+m 会覆盖 ST 内置 "Expand Selection to Brackets"，
+    //       ctrl+shift+v 会覆盖 "Paste and Indent"；如介意请改用其它键。
+
+    // 打开 / 聚焦预览
+    { "keys": ["ctrl+shift+m"], "command": "markdown_preview_enhanced_toggle" },
+
+    // 粘贴剪贴板 HTML / 截图为 markdown
+    { "keys": ["ctrl+shift+v"], "command": "markdown_preview_enhanced_paste_as_markdown" },
+]

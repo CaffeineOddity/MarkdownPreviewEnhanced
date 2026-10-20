@@ -1,5 +1,8 @@
 # fix-issue-6-keymap
 
+> 已被 [no-default-keybindings](no-default-keybindings.md) 取代：最终决定不再随包
+> 默认绑定任何快捷键（issue #11），故本文「保留 `super+shift+m`」的结论作废。
+
 关联：[GitHub Issue #6](https://github.com/CaffeineOddity/MarkdownPreviewEnhanced/issues/6)
 
 ## 背景
