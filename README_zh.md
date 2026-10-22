@@ -50,7 +50,7 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 
 ## 快捷键
 
-本包**不默认绑定任何快捷键**（issue #11），需要请自行绑定：
+本包**不默认绑定任何快捷键**（[issue #11](https://github.com/CaffeineOddity/MarkdownPreviewEnhanced/issues/11)），需要请自行绑定：
 
 - 命令面板(command + shift + p) → 输入KeyBindings,选择**Preferences: MarkdownPreviewEnhanced Key Bindings** 打开双栏视图：左栏示例、右栏 `User` keymap；保存右栏生效。
 - 或粘到 `User` keymap：

@@ -35,7 +35,7 @@ Or clone this repo to `Packages/MarkdownPreviewEnhanced/` (repo root = package r
 
 ## Usage
 
-Open a `.md` file and run **MarkdownPreviewEnhanced: Toggle Preview** to open / focus the preview. The package ships **no default key bindings** (so it never overrides Sublime's built-in shortcuts — issue #11); see [Key bindings](#key-bindings).
+Open a `.md` file and run **MarkdownPreviewEnhanced: Toggle Preview** to open / focus the preview. The package ships **no default key bindings** (so it never overrides Sublime's built-in shortcuts — [issue #11](https://github.com/CaffeineOddity/MarkdownPreviewEnhanced/issues/11)); see [Key bindings](#key-bindings).
 
 - **Paste as Markdown** (right-click or Command Palette) converts clipboard HTML to markdown (headings, bold/italic, links, lists, code blocks, GFM tables); no HTML → plain paste. Linux needs `xclip` / `wl-clipboard`. Set `paste_download_images` to `true` to save remote images into `media/`.
 - Editing updates the preview in place (SSE), scroll kept. Re-running the command focuses the existing tab. Switching tabs in the browser focuses the matching Sublime view, and vice versa. The local server stays up while any preview tab is open and stops shortly after the last one closes.
@@ -50,7 +50,7 @@ Open a `.md` file and run **MarkdownPreviewEnhanced: Toggle Preview** to open / 
 
 ## Key bindings
 
-The package ships **no default key bindings** (issue #11). Bind them yourself:
+The package ships **no default key bindings** ([issue #11](https://github.com/CaffeineOddity/MarkdownPreviewEnhanced/issues/11)). Bind them yourself:
 
 - Command Palette → **Preferences: MarkdownPreviewEnhanced Key Bindings** opens a two-pane editor: the example on the left, your `User` keymap on the right. Save the right pane to apply.
 - Or paste into the `User` keymap:
