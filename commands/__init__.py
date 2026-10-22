@@ -7,6 +7,8 @@ from .close import MarkdownPreviewEnhancedCloseCommand  # noqa: F401
 from .copy_rich_text import MarkdownPreviewEnhancedCopyRichTextCommand  # noqa: F401
 from .export_html import MarkdownPreviewEnhancedExportHtmlCommand  # noqa: F401
 from .export_pdf import MarkdownPreviewEnhancedExportPdfCommand  # noqa: F401
+from .insert_notes import MarkdownPreviewEnhancedInsertNotesCommand  # noqa: F401
+from .insert_pagebreak import MarkdownPreviewEnhancedInsertPagebreakCommand  # noqa: F401
 from .paste_html_as_markdown import (  # noqa: F401
     MarkdownPreviewEnhancedInsertTextCommand,
     MarkdownPreviewEnhancedPasteAsMarkdownCommand,

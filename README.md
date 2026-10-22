@@ -58,7 +58,9 @@ The package ships **no default key bindings** (issue #11). Bind them yourself:
 ```json
 [
     { "keys": ["super+alt+m"], "command": "markdown_preview_enhanced_toggle" },
-    { "keys": ["super+alt+v"], "command": "markdown_preview_enhanced_paste_as_markdown" }
+    { "keys": ["super+alt+v"], "command": "markdown_preview_enhanced_paste_as_markdown" },
+    { "keys": ["super+alt+p"], "command": "markdown_preview_enhanced_insert_pagebreak" },
+    { "keys": ["super+alt+n"], "command": "markdown_preview_enhanced_insert_notes" }
 ]
 ```
 

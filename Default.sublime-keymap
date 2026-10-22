@@ -1,16 +1,37 @@
 [
-    // MarkdownPreviewEnhanced 快捷键示例（默认全部注释，不启用任何键）。
-    // 取消注释某行并保存到右侧 User 区（或 Preferences → Key Bindings 粘贴到 User 侧）即可启用。
+    // =====================================================================
+    // MarkdownPreviewEnhanced 快捷键示例 —— 默认全部注释，不启用任何键。
     //
-    // 推荐用 super+alt / ctrl+alt 前缀，避开 ST 内置键：
+    // 启用方法：
+    //   命令面板运行 "Preferences: MarkdownPreviewEnhanced Key Bindings"
+    //   打开双栏视图（左栏本文件、右栏 User keymap），把需要的行复制到
+    //   右栏并去掉行首 "// "，保存即生效；或 Preferences → Key Bindings
+    //   直接粘贴到 User 侧。
+    //
+    // 推荐 super+alt / ctrl+alt 前缀，避开 ST 内置键：
     //   super+shift+m / ctrl+shift+m = ST 内置 "Expand Selection to Brackets"
     //   super+shift+v / ctrl+shift+v = ST 内置 "Paste and Indent"
+    //
+    // 全部可用命令（命令面板 MarkdownPreviewEnhanced: 前缀下可见）：
+    //   markdown_preview_enhanced_toggle             Toggle Preview
+    //   markdown_preview_enhanced_close              Close Preview
+    //   markdown_preview_enhanced_refresh            Refresh Preview
+    //   markdown_preview_enhanced_presentation       Presentation Mode
+    //   markdown_preview_enhanced_insert_pagebreak   Insert Page Break
+    //   markdown_preview_enhanced_insert_notes       Insert Speaker Notes
+    //   markdown_preview_enhanced_copy_rich_text     Copy as Rich Text
+    //   markdown_preview_enhanced_paste_as_markdown  Paste as Markdown
+    //   markdown_preview_enhanced_export_html        Export HTML…
+    //   markdown_preview_enhanced_export_pdf         Export PDF…
+    // =====================================================================
 
-    // macOS（super = Cmd，alt = Option）
+    // 常用示例（macOS 用 super = Cmd，Windows/Linux 用 ctrl）：
     // { "keys": ["super+alt+m"], "command": "markdown_preview_enhanced_toggle" },
     // { "keys": ["super+alt+v"], "command": "markdown_preview_enhanced_paste_as_markdown" },
-
-    // Windows / Linux（ctrl）
+    // { "keys": ["super+alt+p"], "command": "markdown_preview_enhanced_insert_pagebreak" },
+    // { "keys": ["super+alt+n"], "command": "markdown_preview_enhanced_insert_notes" },
     // { "keys": ["ctrl+alt+m"], "command": "markdown_preview_enhanced_toggle" },
     // { "keys": ["ctrl+alt+v"], "command": "markdown_preview_enhanced_paste_as_markdown" },
+    // { "keys": ["ctrl+alt+p"], "command": "markdown_preview_enhanced_insert_pagebreak" },
+    // { "keys": ["ctrl+alt+n"], "command": "markdown_preview_enhanced_insert_notes" },
 ]

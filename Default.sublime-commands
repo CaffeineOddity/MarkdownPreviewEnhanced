@@ -16,6 +16,14 @@
         "command": "markdown_preview_enhanced_presentation"
     },
     {
+        "caption": "MarkdownPreviewEnhanced: Insert Page Break",
+        "command": "markdown_preview_enhanced_insert_pagebreak"
+    },
+    {
+        "caption": "MarkdownPreviewEnhanced: Insert Speaker Notes",
+        "command": "markdown_preview_enhanced_insert_notes"
+    },
+    {
         "caption": "MarkdownPreviewEnhanced: Copy as Rich Text",
         "command": "markdown_preview_enhanced_copy_rich_text"
     },
