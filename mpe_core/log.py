@@ -8,7 +8,7 @@ import datetime
 import os
 
 # release.sh 发版时改为 False;master 开发保持 True。
-DEBUG = False
+DEBUG = True
 DEBUG_PATH="~/Downloads/MarkdownPreviewEnhanced/debug.log"
 _PREFIX = "[MarkdownPreviewEnhanced]"
 _PATH = None
