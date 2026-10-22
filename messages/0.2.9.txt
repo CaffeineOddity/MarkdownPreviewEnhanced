@@ -1,0 +1,6 @@
+MarkdownPreviewEnhanced 0.2.9
+=============================
+
+- feat(preview): add sidebar show/hide toggle
+- docs(readme): link issue #11 in key-bindings notes
+- chore: restore debug logging on master
