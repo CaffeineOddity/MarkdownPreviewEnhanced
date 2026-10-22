@@ -40,6 +40,7 @@ Sublime Text 4 的浏览器实时 Markdown 预览。零额外依赖。
 - **粘贴为 markdown**（右键或命令面板）把剪贴板 HTML 转为 markdown（标题、粗斜体、链接、列表、代码块、GFM 表格）；无 HTML 则降级为普通粘贴。Linux 需 `xclip` / `wl-clipboard`。设 `paste_download_images` 为 `true` 可把远程图片存到 `media/`。
 - 编辑时浏览器原地更新（SSE），滚动位置保留。再按一次命令聚焦已有标签。浏览器切预览 tab ↔ Sublime 切 view。只要还有预览 tab，本地服务器就保持；全关后很快停服。
 - 侧栏工具条：📋 复制为富文本、🖼️ PNG、💾 独立 HTML、📽️ 演示、🌙/☀️ 暗色、☕ tip。
+- 右下角 👁️ 按钮可隐藏 / 显示整条侧栏（工具条、tabs、目录），专注看正文；选择会被记住。
 - 悬停代码块出现 **Copy** 按钮。**复制为富文本**把渲染 HTML 放剪贴板（浏览器按钮或命令面板），可粘贴进邮件 / Word / Confluence。
 - 暗色默认跟随系统，切换后记在浏览器。点击 Mermaid 图或图片放大。在 Sublime 点某行，预览滚到对应块中间。
 - GFM 任务列表 checkbox 可点击并回写源文件。Callout（`> [!NOTE]` / `TIP` / `IMPORTANT` / `WARNING` / `CAUTION`）、`~~删除~~`、`==高亮==`、`^上标^`、`~下标~` 在预览与导出中均可渲染。

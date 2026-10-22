@@ -882,6 +882,57 @@ html[data-mdpp-theme="dark"] .markdown-body mark {
   overflow-y: hidden;
 }
 
+/* ── sidebar toggle (issue #12) ─────────────────────────────────────────── */
+.mdpp-sidebar-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9998;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mdpp-border);
+  border-radius: 50%;
+  background: var(--mdpp-surface);
+  box-shadow: var(--mdpp-shadow);
+  color: var(--mdpp-fg);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+.mdpp-sidebar-toggle:hover {
+  opacity: 1;
+  background: var(--mdpp-surface-2);
+}
+
+/* 图标表示当前状态：侧栏可见显示「睁眼」（点=隐藏），隐藏后显示「闭眼」（点=显示） */
+.mdpp-sidebar-toggle .mdpp-icon-eye-off {
+  display: none;
+}
+body.mdpp-sidebar-hidden .mdpp-sidebar-toggle .mdpp-icon-eye {
+  display: none;
+}
+body.mdpp-sidebar-hidden .mdpp-sidebar-toggle .mdpp-icon-eye-off {
+  display: block;
+}
+
+/* 隐藏侧栏：整块消失，两列收回单列，正文居中铺满 */
+body.mdpp-sidebar-hidden .mdpp-sidebar {
+  display: none;
+}
+body.mdpp-sidebar-hidden.mdpp-has-toc .mdpp-wrap {
+  display: block;
+  max-width: 920px;
+  padding: 28px 24px 64px;
+}
+body.mdpp-sidebar-hidden.mdpp-has-toc .markdown-body {
+  margin: 0 auto;
+  max-width: 820px;
+  padding: 32px 36px 72px;
+}
+
 /* ── print ────────────────────────────────────────────────────────────── */
 @media print {
   html, body {
@@ -906,6 +957,7 @@ html[data-mdpp-theme="dark"] .markdown-body mark {
   .mdpp-modal,
   .mdpp-countdown,
   .mdpp-sidebar,
+  .mdpp-sidebar-toggle,
   .mdpp-toc { display: none !important; }
 
   .mdpp-wrap {

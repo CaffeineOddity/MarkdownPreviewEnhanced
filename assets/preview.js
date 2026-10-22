@@ -1573,11 +1573,38 @@
     applyTheme(saved);
   }
 
+  // ── sidebar toggle (issue #12) ───────────────────────────────────────
+
+  var SIDEBAR_KEY = "mdpp-sidebar";
+
+  function applySidebar(hidden) {
+    document.body.classList.toggle("mdpp-sidebar-hidden", hidden);
+    var btn = $("mdpp-sidebar-toggle");
+    if (btn) {
+      btn.title = hidden ? "Show sidebar" : "Hide sidebar";
+      btn.setAttribute("aria-label", btn.title);
+      btn.setAttribute("aria-pressed", hidden ? "true" : "false");
+    }
+  }
+
+  window.mdppToggleSidebar = function mdppToggleSidebar() {
+    var hidden = !document.body.classList.contains("mdpp-sidebar-hidden");
+    applySidebar(hidden);
+    try { localStorage.setItem(SIDEBAR_KEY, hidden ? "hidden" : "visible"); } catch (e) {}
+  };
+
+  function initSidebar() {
+    var saved = null;
+    try { saved = localStorage.getItem(SIDEBAR_KEY); } catch (e) {}
+    applySidebar(saved === "hidden");
+  }
+
   // ── init ─────────────────────────────────────────────────────────────
 
   window.mdppInit = function mdppInit() {
     console.log(ts() + " [MDPP] mdppInit called, bc=" + (typeof BroadcastChannel !== "undefined") + " mode=" + cfg.mode + " file=" + channelFile);
     initTheme();
+    initSidebar();
     restoreScroll();
     callRenderMath();
     bindTabList();

@@ -40,6 +40,7 @@ Open a `.md` file and run **MarkdownPreviewEnhanced: Toggle Preview** to open / 
 - **Paste as Markdown** (right-click or Command Palette) converts clipboard HTML to markdown (headings, bold/italic, links, lists, code blocks, GFM tables); no HTML → plain paste. Linux needs `xclip` / `wl-clipboard`. Set `paste_download_images` to `true` to save remote images into `media/`.
 - Editing updates the preview in place (SSE), scroll kept. Re-running the command focuses the existing tab. Switching tabs in the browser focuses the matching Sublime view, and vice versa. The local server stays up while any preview tab is open and stops shortly after the last one closes.
 - Sidebar toolbar: 📋 copy as rich text, 🖼️ PNG, 💾 standalone HTML, 📽️ presentation, 🌙/☀️ dark mode, ☕ tip.
+- The 👁️ button at the bottom-right hides/shows the whole sidebar (toolbar, tabs, TOC) so you can focus on the preview; the choice is remembered.
 - Hover a code block for a **Copy** button. **Copy as Rich Text** copies the rendered HTML to the clipboard (browser button or Command Palette) for mail / Word / Confluence.
 - Dark mode follows `prefers-color-scheme`; the choice is stored in the browser. Click a Mermaid diagram or image to zoom. Clicking a line in Sublime scrolls the matching block to the middle of the preview.
 - GFM task-list checkboxes are clickable and write back to the file. Callouts (`> [!NOTE]` / `TIP` / `IMPORTANT` / `WARNING` / `CAUTION`), `~~del~~`, `==mark==`, `^sup^`, `~sub~` render in preview and exports.
