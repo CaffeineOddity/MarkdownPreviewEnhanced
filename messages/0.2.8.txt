@@ -1,0 +1,13 @@
+MarkdownPreviewEnhanced 0.2.8
+=============================
+
+- docs: add feature acceptance checklist and demo
+- fix(preview): keep frontmatter banner inside main column
+- feat(commands): add pagebreak and speaker-notes insert commands
+- fix(build): tolerate JSONC trailing commas in PC settings
+- fix(keybindings): ship example keymap at package root
+- fix(keybindings): don't ship default keybindings
+- Merge branch 'master' of gitcafe:CaffeineOddity/MarkdownPreviewEnhanced
+- feat: add slide pagebreaks, code meta, frontmatter, image paste
+- chore: relocate specs under docs/specs
+- chore: restore debug logging on master
