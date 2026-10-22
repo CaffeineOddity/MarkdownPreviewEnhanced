@@ -338,3 +338,39 @@ sequenceDiagram
 6. 关掉所有预览 tab → 2s 内停 HTTP；再 Cmd+Shift+M → 服务回来，一张新 tab。
 7. 只切浏览器 tab、不关 → SSE 保持（leader hidden 也不断），10s/3s 后 **不会**停服、不会再 `open -a`。
 8. 浏览器强制杀进程 → ≤60s 停服。
+
+---
+
+## 新增功能验收清单（v0.2.7 → 当前分支）
+
+> 本节与上方「File↔View↔Tab 1:1:1」无关，是相对 v0.2.7 新增 4 个功能的逐条验收步骤（来源提交 `1d06e90`）；实现与行为细节见各自 spec，此处只列验收项。
+
+### 1. 演示分页 + 演讲者备注（docs/specs/presentation-pagebreak.md）
+
+- [ ] 文稿含 h1–h4 标题、但不含 `<!-- pagebreak -->`：进 Presentation Mode 后整篇一页，标题**不再**自动切页。
+- [ ] 中间独立一行插入 `<!-- pagebreak -->`：演示模式在该处切开；连续多个 pagebreak 不产生空页。
+- [ ] 某页后写 `<!-- notes 备注内容 -->`：演示页右下角按 `N` 显示/隐藏备注，切页后自动清除；无备注的页按 `N` 无反应。
+- [ ] 预览正文不出现 `<!-- pagebreak -->` / `<!-- notes -->` 文本。
+- [ ] 导出 HTML/PDF：`<!-- pagebreak -->` 处打印分页，产物中看不到 pagebreak 注释与 notes 内容。
+
+### 2. 代码块文件名 / 行号 / 高亮（docs/specs/code-fence-meta.md）
+
+- [ ] 围栏 info 写 `python title="app.py" {1,3-5}`：头部显示文件名 app.py，行号列出现，第 1/3/4/5 行高亮。
+- [ ] 点头部 Copy：粘贴结果为纯代码，行号与高亮不混入。
+- [ ] 只有 `{...}` 无 `title`：不渲染头部，但仍显示行号与高亮。
+- [ ] `title` 与 `{}` 顺序互换：仍正确识别。
+- [ ] 普通 `python` 围栏（无 title 无 {}）：外观与之前完全一致，无头部无行号。
+
+### 3. frontmatter 顶栏（docs/specs/frontmatter-banner.md）
+
+- [ ] 文首 frontmatter 含 `title: 测试文档`、`date: 2026-10-20`、`tags: [a, b, c]`：预览顶部出现「测试文档 · 2026-10-20 · a b c」。
+- [ ] `tags` 改用块列表 `- a` / `- b`：仍解析为 a、b。
+- [ ] 无 frontmatter：不出现顶栏。
+- [ ] 导出 HTML/PDF：`<title>` 与导出文件名用 `title`；删掉 `title` 后退回文件名。
+
+### 4. 剪贴板截图粘贴（docs/specs/clipboard-image-paste.md）
+
+- [ ] 系统截图入剪贴板后，运行「Paste as Markdown」命令（命令面板 `MarkdownPreviewEnhanced: Paste as Markdown`，或自行绑定的键）：生成 `media/pasted-*.png` 并插入 `![](media/xxx.png)`，状态栏提示路径。
+- [ ] 复制网页富文本后运行同一命令：行为与原有 HTML→markdown 一致。
+- [ ] 复制纯文本后运行同一命令：降级普通粘贴。
+- [ ] 未保存的 buffer 上粘贴截图：不落盘、状态栏提示（无路径）。
