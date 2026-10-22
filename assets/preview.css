@@ -90,6 +90,12 @@ body {
   padding: 0;
 }
 
+/* frontmatter banner 与正文同列：有 TOC 时 mdpp-wrap 是两列 grid，
+   banner 不能作为第三个子元素参与列布局，否则正文会被挤到 TOC 下方。 */
+.mdpp-main {
+  min-width: 0;
+}
+
 .mdpp-has-toc .mdpp-wrap {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
