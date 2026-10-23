@@ -1,0 +1,5 @@
+MarkdownPreviewEnhanced 0.3.0
+=============================
+
+- feat(preview): highlight code via vendored pygments and show line numbers
+- chore: restore debug logging on master
