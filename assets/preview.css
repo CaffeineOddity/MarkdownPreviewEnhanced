@@ -408,6 +408,7 @@ body {
 }
 
 .markdown-body .codehilite {
+  position: relative;
   margin: 0 0 1.1em;
   border-radius: var(--mdpp-radius);
   overflow: auto;
@@ -445,6 +446,7 @@ body {
 }
 
 .markdown-body pre:hover .mdpp-code-copy,
+.markdown-body .codehilite:hover > .mdpp-code-copy,
 .mdpp-code-copy:focus-visible {
   opacity: 1;
 }
@@ -513,8 +515,9 @@ html[data-mdpp-theme="dark"] .mdpp-code-copy.mdpp-copied {
 }
 
 /* Pygments linenos="table" layout inside .mdpp-code */
-.codehilite table.highlighttable,
-.codehilite table.codehilitetable {
+.markdown-body .codehilite table.highlighttable,
+.markdown-body .codehilite table.codehilitetable {
+  display: table;
   border-collapse: collapse;
   width: 100%;
   margin: 0;

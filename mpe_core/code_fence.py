@@ -9,10 +9,12 @@ highlight table plus an optional header with a Copy button.
 Blocks without metadata pass through untouched, so the common case keeps the
 existing codehilite output byte-for-byte.
 
-Pygments is already a transitive dependency (codehilite requires it). If it is
-missing the block degrades to escaped ``<pre>`` text rather than failing.
+Pygments ships inside mdpopups (``mdpopups.pygments``), not as a top-level
+package, on Sublime's plugin host. If neither import works the block degrades
+to escaped ``<pre>`` text rather than failing.
 """
 import re
+import sys
 
 _MARKER_TMPL = "\x00MDPP_FENCE_%d\x00"
 
@@ -77,7 +79,7 @@ def _is_close(line, fence_char, fence_len):
 
 
 def extract_code_fences(text):
-    """Stash metadata-bearing fenced blocks; leave the rest untouched.
+    """Stash every closed fenced block.
 
     Returns ``(text, stash)`` where *stash* is an ordered list of
     ``{"lang", "title", "hl", "code"}`` and stashed blocks are replaced by
@@ -108,17 +110,14 @@ def extract_code_fences(text):
             out.extend(lines[i:])
             break
 
-        if title is not None or hl is not None:
-            idx = len(stash)
-            stash.append({
-                "lang": lang,
-                "title": title,
-                "hl": hl,
-                "code": "\n".join(code_lines),
-            })
-            out.append(_MARKER_TMPL % idx)
-        else:
-            out.extend(lines[i:j + 1])
+        idx = len(stash)
+        stash.append({
+            "lang": lang,
+            "title": title,
+            "hl": hl,
+            "code": "\n".join(code_lines),
+        })
+        out.append(_MARKER_TMPL % idx)
         i = j + 1
     return "\n".join(out), stash
 
@@ -134,6 +133,28 @@ def restore_code_fences(html, stash):
     return html
 
 
+def pygments_modules():
+    """Return ``(pygments, lexers, formatters)`` or raise ``ImportError``.
+
+    Sublime's plugin host has no top-level ``pygments``; mdpopups vendors it as
+    ``mdpopups.pygments`` and rewrites ``pygments.*`` imports to that name.
+    Prefer the real package when a non-Sublime runner has one installed.
+    """
+    try:
+        import pygments
+        import pygments.lexers as lexers
+        import pygments.formatters as formatters
+        return pygments, lexers, formatters
+    except ImportError:
+        pass
+    import mdpopups.pygments as pygments
+    import mdpopups.pygments.lexers as lexers
+    import mdpopups.pygments.formatters as formatters
+    # codehilite does ``from pygments import highlight`` at import time.
+    sys.modules.setdefault("pygments", pygments)
+    return pygments, lexers, formatters
+
+
 def render_block(meta):
     """Render one stashed block to a ``.mdpp-code`` fragment."""
     from html import escape
@@ -142,29 +163,26 @@ def render_block(meta):
     title = meta["title"]
     hl = meta["hl"]
     code = meta["code"]
-    line_numbers = title is not None or hl is not None
 
     try:
-        from pygments import highlight
-        from pygments.formatters import HtmlFormatter
-        from pygments.lexers import TextLexer, get_lexer_by_name
-
-        lexer = TextLexer()
+        pygments, lexers, formatters = pygments_modules()
+    except ImportError:
+        highlighted = "<pre><code>%s</code></pre>" % escape(code)
+    else:
+        lexer = lexers.TextLexer()
         if lang:
             try:
-                lexer = get_lexer_by_name(lang)
+                lexer = lexers.get_lexer_by_name(lang)
             except Exception:
-                lexer = TextLexer()
-        formatter = HtmlFormatter(
+                lexer = lexers.TextLexer()
+        formatter = formatters.HtmlFormatter(
             cssclass="codehilite",
             noclasses=False,
-            linenos="table" if line_numbers else None,
-            hl_lines=hl,
+            linenos="table",
+            hl_lines=hl or [],
             wrapcode=False,
         )
-        highlighted = highlight(code, lexer, formatter)
-    except Exception:
-        highlighted = "<pre><code>%s</code></pre>" % escape(code)
+        highlighted = pygments.highlight(code, lexer, formatter)
 
     return '<div class="mdpp-code">%s%s</div>' % (
         _build_header(title, lang), highlighted)

@@ -7,7 +7,8 @@
 ## 行为
 
 - 目标元素：`.markdown-body pre`（含 `.codehilite pre`）；mermaid fence（`pre.mermaid`）与 echarts 容器**不加**按钮。
-- 按钮 hover 时出现（触屏设备常显），绝对定位于 pre 右上角；暗黑主题适配。
+- 带行号表的块（`.codehilite`）按钮挂在 `.codehilite` 上，不挂在代码列的 `pre` 里。行号表是 `width: max-content` 的表格，按钮若挂在 `pre` 上会贴住第一行文字。
+- 按钮 hover 时出现（触屏设备常显），绝对定位于代码块右上角；暗黑主题适配。
 - 复制内容：代码块可见文本（`textContent`），原样保留换行；优先 `navigator.clipboard.writeText`，失败降级 `document.execCommand("copy")`。
 - 内容更新（SSE 重渲染）后按钮随之重建；重复绑定需幂等（参照 `bindMermaidZoom` 的 `_bound` 模式，用事件委托）。
 - 导出 HTML / PNG / 打印时按钮不出现（`@media print` 已隐藏 toolbar；导出 standalone HTML 不含 preview.js，天然无按钮）。

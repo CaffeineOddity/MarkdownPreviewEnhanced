@@ -456,11 +456,12 @@
       if (!btn) return;
 
       // The callout header's Copy sits next to the <pre>, not inside it.
-      var wrap = btn.closest(".mdpp-code");
+      var wrap = btn.closest(".mdpp-code") || btn.closest(".codehilite");
       var pre;
       if (wrap) {
         pre = wrap.querySelector(".code pre, td.code pre")
-          || wrap.querySelector(".codehilite > pre");
+          || wrap.querySelector(".codehilite > pre")
+          || wrap.querySelector("pre");
       } else {
         pre = btn.closest("pre");
       }
@@ -495,12 +496,15 @@
       // .mdpp-code already carries a header Copy; line-number gutters are not code.
       if (pre.closest(".mdpp-code")) continue;
       if (pre.closest(".linenos") || pre.closest(".linenodiv")) continue;
+      var hilite = pre.closest(".codehilite");
+      if (hilite && hilite.querySelector(".mdpp-code-copy")) continue;
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "mdpp-code-copy";
       btn.textContent = "Copy";
       btn.setAttribute("aria-label", "Copy code");
-      pre.appendChild(btn);
+      // 行号表的 pre 只跟代码列一样宽，按钮挂在上面会贴住第一行。
+      (hilite || pre).appendChild(btn);
     }
   }
 

@@ -30,13 +30,13 @@ class TestParseFenceInfo(unittest.TestCase):
 
 
 class TestExtractFences(unittest.TestCase):
-    def test_only_metadata_stashed(self):
+    def test_plain_fence_also_stashed(self):
         text = '```python title="a.py" {1}\nx\n```\n\n```\nplain\n```'
         newtext, stash = extract_code_fences(text)
-        self.assertEqual(len(stash), 1)
+        self.assertEqual(len(stash), 2)
         self.assertEqual(stash[0]["title"], "a.py")
-        self.assertIn("\x00MDPP_FENCE_0\x00", newtext)
-        self.assertIn("```\nplain\n```", newtext)
+        self.assertEqual(stash[1]["code"], "plain")
+        self.assertNotIn("```\nplain\n```", newtext)
 
     def test_restore_wraps(self):
         text = '```python title="a.py" {1}\nx\n```'
@@ -48,13 +48,11 @@ class TestExtractFences(unittest.TestCase):
 
 
 class TestRenderBlock(unittest.TestCase):
-    def test_render_has_header_and_copy(self):
-        meta = {"lang": "python", "title": "app.py", "hl": [1], "code": "x\n"}
+    def test_plain_fence_header_has_copy(self):
+        meta = {"lang": "shell", "title": None, "hl": None, "code": "ruby x.rb\n"}
         html = render_block(meta)
-        self.assertIn('class="mdpp-code"', html)
-        self.assertIn("app.py", html)
-        self.assertIn("mdpp-code-copy", html)
-        self.assertIn("linenos", html)
+        self.assertIn("mdpp-code-header", html)
+        self.assertLess(html.index("mdpp-code-copy"), html.index("codehilitetable"))
 
 
 if __name__ == "__main__":

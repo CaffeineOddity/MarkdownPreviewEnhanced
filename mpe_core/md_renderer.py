@@ -33,6 +33,8 @@ def _load_mdpopups():
     manual/development zip install working without PC's dependency machinery.
     """
     try:
+        from .code_fence import pygments_modules
+        pygments_modules()
         from mdpopups import markdown as _md
         from mdpopups.markdown.extensions.attr_list import AttrListExtension
         from mdpopups.markdown.extensions.codehilite import CodeHiliteExtension
@@ -100,6 +102,8 @@ def _load_mdpopups():
             sys.path.insert(0, c)
         debug("mdpopups fallback: using %s" % c)
         try:
+            from .code_fence import pygments_modules
+            pygments_modules()
             from mdpopups import markdown as _md
             from mdpopups.markdown.extensions.attr_list import AttrListExtension
             from mdpopups.markdown.extensions.codehilite import CodeHiliteExtension
@@ -866,6 +870,28 @@ def _extract_math(text, replace_emoji=False):
     return text, math_html
 
 
+def _table_linenos_formatter():
+    """Pygments HTML formatter class that always emits the line-number table.
+
+    ``linenums=True`` only flips the boolean form, which this Pygments renders
+    as inline ``<span class="linenos">`` inside the code. The preview styles the
+    separate gutter column, so the formatter has to request ``linenos="table"``.
+    """
+    from .code_fence import pygments_modules
+
+    try:
+        _pygments, _lexers, formatters = pygments_modules()
+    except ImportError:
+        return "html"
+
+    class _TableLinenosHtmlFormatter(formatters.HtmlFormatter):
+        def __init__(self, **options):
+            options["linenos"] = "table"
+            formatters.HtmlFormatter.__init__(self, **options)
+
+    return _TableLinenosHtmlFormatter
+
+
 def _restore_math(html, math_html):
     for i, frag in enumerate(math_html):
         marker = _MATH_MARKER_TMPL % i
@@ -977,7 +1003,11 @@ def render(
         AttrListExtension(),
         Nl2BrExtension(),
         TocExtension(permalink=False, toc_depth=6, title="Contents"),
-        CodeHiliteExtension(guess_lang=False, linenums=False),
+        CodeHiliteExtension(
+            guess_lang=False,
+            linenums=True,
+            pygments_formatter=_table_linenos_formatter(),
+        ),
         MdppInlineExtension(),
     ]
     if enable_footnotes:
