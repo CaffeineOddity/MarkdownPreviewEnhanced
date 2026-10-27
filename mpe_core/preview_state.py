@@ -44,12 +44,28 @@ _pending_link_opens = tab_manager._pending_link_opens
 
 # ── logging shims ────────────────────────────────────────────────────────────
 
+# 生命周期 / 连接 / 鉴权类消息前缀：发版也写日志文件（控制台仍只在 debug 时打印），
+# 用于排查 tab 管理、预览断连、拒绝访问等问题。逐请求/逐事件的高频消息不在此列。
+_SERVER_INFO_PREFIXES = (
+    "preview server",
+    "sse connect",
+    "sse disconnect",
+    "sse drop",
+    "sse fanout",
+    "tab_open",
+    "tab_close",
+    "close_old",
+    "open_doc",
+    "WEB->ST rejected",
+)
+
+
 def server_log(msg):
     text = msg or ""
     low = text.lower()
     if "failed" in low or "error" in low:
         log.error(text)
-    elif text.startswith("preview server"):
+    elif text.startswith(_SERVER_INFO_PREFIXES):
         log.info(text)
     else:
         log.debug(text)
@@ -61,7 +77,7 @@ def browser_log(msg):
     if "failed" in low or "error" in low:
         log.error(text)
     else:
-        log.debug(text)
+        log.info(text)
 
 
 # ── server lifecycle ─────────────────────────────────────────────────────────
@@ -379,8 +395,8 @@ def start_scroll_poller():
             if docs:
                 items = [(d["path"], d.get("focus_browser", False)) for d in docs]
                 for path, fb in items:
-                    log.debug("open doc from browser: %s (focus_browser=%s) tabs=%d"
-                              % (path, fb, tab_manager.live_count()))
+                    log.info("open doc from browser: %s (focus_browser=%s) tabs=%d"
+                             % (path, fb, tab_manager.live_count()))
                 sublime.set_timeout(
                     lambda: [open_doc_from_browser(p, focus_browser=fb)
                              for p, fb in items], 0

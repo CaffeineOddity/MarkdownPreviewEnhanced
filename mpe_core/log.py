@@ -1,8 +1,8 @@
 """Unified logging for MarkdownPreviewEnhanced.
 
-DEBUG 为真时打印 debug 级日志(本地开发默认)。
-release.sh 打 tag 前会把本文件改成 DEBUG 为假,发版包保持安静。
-发版安装仍可在 User 设置里加 ``"debug": true`` 打开详细日志。
+所有写入 ST 控制台的输出都由 DEBUG 门控:发版包 (DEBUG=False) 不打印任何东西,
+日志只写文件;开发态 (master DEBUG=True) 或用户在设置里开 ``"debug": true`` 时才打印。
+release.sh 打 tag 前会把本文件改成 DEBUG 为假。
 """
 import datetime
 import os
@@ -69,27 +69,27 @@ def _write_file(msg):
         with open(path, "a", encoding="utf-8") as f:
             f.write("[%s] %s\n" % (ts, msg))
     except Exception:
-        print("write_log failed")
-        pass
+        if _want_debug():
+            print("write_log failed")
 
 
 def _emit(msg):
-    line = "%s %s" % (_PREFIX, msg)
-    print(line)
+    if _want_debug():
+        print("%s %s" % (_PREFIX, msg))
     _write_file(msg)
 
 
 def info(msg):
-    """始终打印:启动、关预览、失败等少量关键信息。"""
+    """写日志文件;DEBUG 打开时才打印到控制台。"""
     _emit(msg)
 
 
 def error(msg):
-    """始终打印:失败与异常。"""
+    """写日志文件;DEBUG 打开时才打印到控制台(失败与异常)。"""
     _emit(msg)
 
 
 def debug(msg):
-    """详细跟踪;发版默认关闭。"""
+    """详细跟踪;DEBUG 打开时才写文件并打印。"""
     if _want_debug():
         _emit(msg)

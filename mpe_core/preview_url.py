@@ -30,7 +30,7 @@ def open_preview_browser(url, focus_existing):
     """
     preview_state.mark_browser_open()
     preferred = config.get("browser", "auto") or "auto"
-    log.debug("browser open: focus_existing=%s url=%s" % (
+    log.info("browser open: focus_existing=%s url=%s" % (
         focus_existing, redact_auth_text(url)))
 
     def _work():
@@ -59,7 +59,7 @@ def focus_preview_tab(file_path):
     if not file_path:
         return
     url = tab_manager.preview_url(file_path)
-    log.debug("focus existing preview tab: %s" % redact_auth_text(url))
+    log.info("focus existing preview tab: %s" % redact_auth_text(url))
 
     def _work():
         try:
