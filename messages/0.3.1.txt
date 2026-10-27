@@ -1,0 +1,5 @@
+MarkdownPreviewEnhanced 0.3.1
+=============================
+
+- fix(logging): keep console quiet in release and route lifecycle events to file
+- chore: restore debug logging on master
