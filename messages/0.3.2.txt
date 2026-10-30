@@ -1,0 +1,6 @@
+MarkdownPreviewEnhanced 0.3.2
+=============================
+
+- fix(render): emit ol start attribute via sane_lists
+- fix(render): tolerate old python-markdown without pygments_formatter
+- chore: restore debug logging on master
