@@ -892,6 +892,20 @@ def _table_linenos_formatter():
     return _TableLinenosHtmlFormatter
 
 
+def _build_codehilite():
+    """构造 CodeHilite 扩展，兼容旧版 python-markdown 缺少 pygments_formatter 选项。
+
+    mdpopups 旧版 vendored 的 python-markdown 3.2.x，其 codehilite 没有
+    ``pygments_formatter`` 选项（3.4 才加入）；传了会在 Extension.setConfig 抛
+    KeyError，整页只显示异常文本。这里仅在新版支持时传该选项以强制行号表格；
+    旧版回退为只开 linenums，行号降级为行内样式但文档仍正常渲染。
+    """
+    options = {"guess_lang": False, "linenums": True}
+    if "pygments_formatter" in getattr(CodeHiliteExtension, "config", {}):
+        options["pygments_formatter"] = _table_linenos_formatter()
+    return CodeHiliteExtension(**options)
+
+
 def _restore_math(html, math_html):
     for i, frag in enumerate(math_html):
         marker = _MATH_MARKER_TMPL % i
@@ -1003,11 +1017,7 @@ def render(
         AttrListExtension(),
         Nl2BrExtension(),
         TocExtension(permalink=False, toc_depth=6, title="Contents"),
-        CodeHiliteExtension(
-            guess_lang=False,
-            linenums=True,
-            pygments_formatter=_table_linenos_formatter(),
-        ),
+        _build_codehilite(),
         MdppInlineExtension(),
     ]
     if enable_footnotes:
