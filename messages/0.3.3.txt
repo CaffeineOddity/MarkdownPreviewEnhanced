@@ -1,0 +1,7 @@
+MarkdownPreviewEnhanced 0.3.3
+=============================
+
+- fix(preview): draw subgraph external edges from the node
+- fix(preview): ignore a heading that clobbers window.mermaid
+- fix(preview): keep unicode heading anchors and scroll in-page links
+- chore: restore debug logging on master
