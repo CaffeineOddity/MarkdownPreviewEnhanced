@@ -1173,7 +1173,19 @@
       }
       var a = ev.target.closest ? ev.target.closest("a") : null;
       if (!a) return;
-      var file = fileFromHref(a.getAttribute("href") || "");
+      var href = a.getAttribute("href") || "";
+      // 页内锚点：直接滚动到目标 id（含中文等 Unicode），避免被 fileFromHref
+      // 用当前页面的 ?file= 填充而误判成文档链接，吞掉锚点跳转。
+      if (href.charAt(0) === "#") {
+        var id = decodeURIComponent(href.slice(1));
+        var el = document.getElementById(id);
+        if (el) {
+          ev.preventDefault();
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        return;
+      }
+      var file = fileFromHref(href);
       if (!file) return;
       ev.preventDefault();
       switchToPreview(file);

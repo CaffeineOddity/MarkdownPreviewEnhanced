@@ -911,6 +911,17 @@ def _build_codehilite():
     return CodeHiliteExtension(**options)
 
 
+def _unicode_slugify(value, separator):
+    """保留 Unicode 的 slugify，等价于 python-markdown 3.3+ 的 slugify_unicode。
+
+    mdpopups 旧版 vendored 的 python-markdown 3.2.x 只有会丢非 ASCII 的 slugify，
+    中文标题会被压成空串再退化为 ``_1``/``_2`` 序号。这里不依赖版本，直接用等价
+    实现：Python 3 下正则 ``\\w`` 匹配 Unicode 字母，因此中文字符会被保留。
+    """
+    value = re.sub(r"[^\w\s-]", "", value).strip().lower()
+    return re.sub(r"[%s\s]+" % separator, separator, value)
+
+
 def _restore_math(html, math_html):
     for i, frag in enumerate(math_html):
         marker = _MATH_MARKER_TMPL % i
@@ -1022,7 +1033,7 @@ def render(
         AttrListExtension(),
         Nl2BrExtension(),
         SaneListExtension(),
-        TocExtension(permalink=False, toc_depth=6, title="Contents"),
+        TocExtension(permalink=False, toc_depth=6, title="Contents", slugify=_unicode_slugify),
         _build_codehilite(),
         MdppInlineExtension(),
     ]
