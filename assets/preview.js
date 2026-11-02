@@ -139,11 +139,15 @@
   }
 
   function renderMermaid() {
-    if (typeof window.mermaid === "undefined") return;
+    // 库脚本执行前，id/name 为 mermaid 的标题会以命名属性出现在 window.mermaid
+    // 上（真值，但没有 run）。这时不能 initialize，也不能把这次当成已加载。
+    // 脚本赋值后会变成自身属性，之后 innerHTML 换内容不会再把它盖回去。
+    var mm = window.mermaid;
+    if (!mm || typeof mm.run !== "function") return;
     stashMermaidSources();
     restoreMermaidSources();
     try {
-      mermaid.initialize({
+      mm.initialize({
         startOnLoad: false,
         theme: currentMermaidTheme(),
         securityLevel: "loose",
@@ -151,7 +155,7 @@
         flowchart: { htmlLabels: false },
         sequence: { useMaxWidth: true },
       });
-      mermaid.run({ querySelector: ".mermaid" }).catch(function (e) {
+      mm.run({ querySelector: ".mermaid" }).catch(function (e) {
         console.warn("[MDPP] mermaid run error", e);
       });
     } catch (e) {
