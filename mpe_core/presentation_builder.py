@@ -258,7 +258,7 @@ def _static_scripts():
         'function addSrc(u){var s=document.createElement("script");'
         's.src=u;s.async=true;document.head.appendChild(s);}'
         'if(!window.caches){urls.forEach(addSrc);return;}'
-        'caches.open("mdpp-static-v1").then(function(c){'
+        'caches.open("mdpp-static-v2").then(function(c){'
         'urls.forEach(function(u){'
         'c.match(u).then(function(h){'
         'if(h){h.arrayBuffer().then(inject);}else{addSrc(u);}'

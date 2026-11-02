@@ -282,7 +282,8 @@ def _cache_first_scripts():
     return (
         "<script>(function(){"
         "var urls=%s;"
-        "var CACHE='mdpp-static-v1';"
+        # 按缓存名整份命中，不看文件内容。换 mermaid / echarts 时要改这个名字。
+        "var CACHE='mdpp-static-v2';"
         "function addSrc(url){"
         "var s=document.createElement('script');s.src=url;s.async=true;"
         "document.head.appendChild(s);}"

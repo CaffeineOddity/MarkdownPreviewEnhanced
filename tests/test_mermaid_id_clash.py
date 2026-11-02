@@ -5,6 +5,7 @@
 它是真值但没有 run，旧的存在性判断会调用 initialize 并就此停止重试。
 """
 import os
+import re
 import unittest
 
 from mpe_core.html_builder import build_export_html, build_preview_shell
@@ -23,11 +24,15 @@ def _body(text):
     )["body_html"]
 
 
-def _preview_js():
+def _asset(name):
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    path = os.path.join(root, "assets", "preview.js")
+    path = os.path.join(root, "assets", name)
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
+
+
+def _preview_js():
+    return _asset("preview.js")
 
 
 class TestMermaidHeadingId(unittest.TestCase):
@@ -65,6 +70,19 @@ class TestMermaidGlobalGuard(unittest.TestCase):
         self.assertIn('typeof window.mermaid.run==="function"', html)
         self.assertNotIn("if(window.mermaid&&!window.__mdppMm)", html)
         self.assertIn("needMm=", html)
+
+
+class TestBundledMermaidSubgraphEdges(unittest.TestCase):
+    def test_version_keeps_external_edge_on_the_node(self):
+        # issue #19：11.16.0 合入 #7672 后，子图里的节点连到外面时，
+        # direction 会被单独排版，外连边从子图边框出发。11.17.0 撤回了
+        # 这个改动，11.17.2 把 edgePaths 类名补了回来。不要退回 11.16。
+        text = _asset("mermaid.min.js")
+        match = re.search(r'\{version:"(\d+)\.(\d+)\.(\d+)"\}', text)
+        self.assertIsNotNone(match)
+        version = tuple(int(part) for part in match.groups())
+        self.assertGreaterEqual(version, (11, 17, 2))
+        self.assertLess(version, (12, 0, 0))
 
 
 if __name__ == "__main__":
