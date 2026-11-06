@@ -86,6 +86,7 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | `enable_task_lists` | `true` | `- [ ]` / `- [x]` |
 | `enable_footnotes` | `true` | `[^1]` |
 | `strip_frontmatter` | `true` | 去掉文首 YAML `---` |
+| `break_on_single_newline` | `false` | `false`：段内单个换行保持软换行（CommonMark / GitHub 上的 `.md` 文件）。`true`：每个换行变成 `<br>` |
 | `scroll_sync` | `true` | 编辑器 ↔ 预览（需要本地服务器） |
 | `paste_download_images` | `false` | 粘贴为 markdown：把远程图片下载到 `media/` |
 | `paste_images_dir` | `"media"` | 下载图片子目录（相对 md 文件） |

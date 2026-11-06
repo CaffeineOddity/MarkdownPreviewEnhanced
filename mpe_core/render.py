@@ -57,6 +57,7 @@ def render_settings():
         "enable_toc": bool(config.get("show_toc", True)),
         "strip_yaml": bool(config.get("strip_frontmatter", True)),
         "enable_math": bool(config.get("enable_katex", True)),
+        "break_on_single_newline": bool(config.get("break_on_single_newline", False)),
         "image_mode": "server" if config.get("use_local_server", True) else "file",
     }
 
@@ -138,6 +139,7 @@ def publish(result, view, force_open=False):
             export_base_dir=base_dir,
             export_settings={
                 "mermaid_theme": config.get("mermaid_theme", "default") or "default",
+                "break_on_single_newline": bool(config.get("break_on_single_newline", False)),
                 "show_toc": False,
                 "enable_katex": enable_katex,
                 "custom_css": custom_css,
@@ -194,6 +196,7 @@ def render_view(view, force=False, open_browser=False, focus_browser=False):
                 strip_yaml=rs["strip_yaml"],
                 enable_math=rs["enable_math"],
                 enable_emoji=rs["enable_emoji"],
+                break_on_single_newline=rs["break_on_single_newline"],
             )
             if result.get("errors"):
                 log.error("render errors: %r" % result["errors"])

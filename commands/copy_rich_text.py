@@ -89,6 +89,7 @@ class MarkdownPreviewEnhancedCopyRichTextCommand(sublime_plugin.TextCommand):
                     strip_yaml=rs["strip_yaml"],
                     enable_math=rs["enable_math"],
                     enable_emoji=rs["enable_emoji"],
+                    break_on_single_newline=rs["break_on_single_newline"],
                 )
                 html = build_clipboard_html(
                     result["body_html"], title=title)

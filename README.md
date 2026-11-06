@@ -86,6 +86,7 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | `enable_task_lists` | `true` | `- [ ]` / `- [x]` |
 | `enable_footnotes` | `true` | `[^1]` |
 | `strip_frontmatter` | `true` | Strip leading `---` YAML |
+| `break_on_single_newline` | `false` | `false`: a single newline stays in the paragraph (CommonMark / GitHub `.md` files). `true`: each newline becomes `<br>` |
 | `scroll_sync` | `true` | Editor ↔ preview (needs local server) |
 | `paste_download_images` | `false` | Paste as markdown: download remote images to `media/` |
 | `paste_images_dir` | `"media"` | Subdirectory for downloaded images (relative to md file) |

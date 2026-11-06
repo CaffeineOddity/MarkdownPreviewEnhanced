@@ -9,7 +9,8 @@ from .md_renderer import render as render_markdown, rewrite_image_srcs
 
 
 def _render_standalone(text, base_dir, mermaid_theme, show_toc, enable_katex,
-                       custom_css, title, log, favicon, embed_images=True):
+                       custom_css, title, log, favicon, embed_images=True,
+                       break_on_single_newline=False):
     """Shared helper: render markdown and build standalone export HTML."""
     result = render_markdown(
         text,
@@ -17,6 +18,7 @@ def _render_standalone(text, base_dir, mermaid_theme, show_toc, enable_katex,
         base_dir=base_dir,
         image_mode="file",
         enable_toc=show_toc,
+        break_on_single_newline=break_on_single_newline,
     )
     body = result["body_html"]
     toc = result["toc_html"] if show_toc else ""
@@ -55,11 +57,13 @@ def export_html(
     log=None,
     favicon="",
     embed_images=True,
+    break_on_single_newline=False,
 ):
     log = log or (lambda m: None)
     html, errors = _render_standalone(
         text, base_dir, mermaid_theme, show_toc, enable_katex,
         custom_css, title, log, favicon, embed_images=embed_images,
+        break_on_single_newline=break_on_single_newline,
     )
     dest_path = os.path.expanduser(dest_path)
     os.makedirs(os.path.dirname(dest_path) or ".", exist_ok=True)
@@ -80,6 +84,7 @@ def export_pdf(
     title="Markdown Export",
     log=None,
     favicon="",
+    break_on_single_newline=False,
 ):
     """Render via headless Chrome/Chromium --print-to-pdf."""
     log = log or (lambda m: None)
@@ -94,6 +99,7 @@ def export_pdf(
     html, _errors = _render_standalone(
         text, base_dir, mermaid_theme, show_toc, enable_katex,
         custom_css, title, log, favicon, embed_images=True,
+        break_on_single_newline=break_on_single_newline,
     )
 
     fd, tmp_html = tempfile.mkstemp(suffix=".html", prefix="mdpp_export_")
@@ -143,6 +149,7 @@ def export_png(
     title="Markdown Export",
     log=None,
     favicon="",
+    break_on_single_newline=False,
 ):
     """Render via headless Chrome/Chromium --screenshot."""
     log = log or (lambda m: None)
@@ -156,6 +163,7 @@ def export_png(
     html, _errors = _render_standalone(
         text, base_dir, mermaid_theme, show_toc, enable_katex,
         custom_css, title, log, favicon, embed_images=True,
+        break_on_single_newline=break_on_single_newline,
     )
 
     fd, tmp_html = tempfile.mkstemp(suffix=".html", prefix="mdpp_export_")

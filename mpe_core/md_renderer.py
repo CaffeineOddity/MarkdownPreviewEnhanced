@@ -3,11 +3,11 @@
 Features:
   - Frontmatter stripping
   - Mermaid → SVG (via mermaid_renderer)
-  - Tables, fenced code, codehilite (Pygments), TOC, attr_list, nl2br, footnotes
+  - Tables, fenced code, codehilite (Pygments), TOC, attr_list, footnotes
   - GFM task lists
   - Relative image rewrite (for local server or file://)
   - Heading and block-level data-line attributes for scroll sync
-  - Math is extracted *before* markdown (so nl2br / escapes cannot break it),
+  - Math is extracted *before* markdown (so escapes cannot break it),
     emitted as ``.mdpp-math`` nodes, and rendered client-side by KaTeX.
 """
 import os
@@ -579,7 +579,7 @@ _CALLOUT_TYPES = {
 
 # blockquote 开标签后紧跟的第一个 <p> 整段（允许中间空白）；
 # 不跨嵌套元素——callout 语法要求首行就是 [!TYPE]。
-# nl2br 会把首行后续内容变成 <br>，因此必须消费整个 <p>…</p> 再重写。
+# 开启 nl2br 时首行后续内容会变成 <br>，因此必须消费整个 <p>…</p> 再重写。
 _CALLOUT_P_RE = re.compile(
     r"<blockquote(\s[^>]*)?>[ \t]*\n?<p>(?P<inner>.*?)</p>",
     re.DOTALL,
@@ -943,6 +943,7 @@ def render(
     strip_yaml=True,
     enable_math=True,
     enable_emoji=True,
+    break_on_single_newline=False,
 ):
     """Render markdown text to HTML.
 
@@ -1027,16 +1028,21 @@ def render(
     # Pass extension *instances* (not string names like
     # "markdown.extensions.fenced_code") so python-markdown does not need to
     # resolve extensions via absolute importlib paths at convert time.
+    # 单个换行默认是软换行，和 CommonMark / GitHub 上的 .md 文件一致。
+    # break_on_single_newline 才插 nl2br，把每个换行收成 <br>。
     extensions = [
         FencedCodeExtension(),
         TableExtension(),
         AttrListExtension(),
-        Nl2BrExtension(),
+    ]
+    if break_on_single_newline:
+        extensions.append(Nl2BrExtension())
+    extensions.extend([
         SaneListExtension(),
         TocExtension(permalink=False, toc_depth=6, title="Contents", slugify=_unicode_slugify),
         _build_codehilite(),
         MdppInlineExtension(),
-    ]
+    ])
     if enable_footnotes:
         extensions.append(FootnoteExtension())
 
@@ -1054,9 +1060,10 @@ def render(
                 FencedCodeExtension(),
                 TableExtension(),
                 AttrListExtension(),
-                Nl2BrExtension(),
-                MdppInlineExtension(),
             ]
+            if break_on_single_newline:
+                fallback_ext.append(Nl2BrExtension())
+            fallback_ext.append(MdppInlineExtension())
             if enable_footnotes:
                 fallback_ext.append(FootnoteExtension())
             md = _md.Markdown(extensions=fallback_ext, output_format="html5")

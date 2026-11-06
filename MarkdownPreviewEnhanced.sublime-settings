@@ -45,6 +45,10 @@
     // Strip YAML frontmatter (--- ... ---) before rendering.
     "strip_frontmatter": true,
 
+    // Single newlines inside a paragraph are soft breaks (CommonMark / a
+    // GitHub .md file). Set true to turn each one into a <br>.
+    "break_on_single_newline": false,
+
     // Bidirectional scroll sync (requires use_local_server).
     "scroll_sync": true,
 

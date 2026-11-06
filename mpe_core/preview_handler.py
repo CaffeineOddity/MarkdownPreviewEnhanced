@@ -622,6 +622,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 base_dir=base_dir,
                 image_mode="file",
                 enable_toc=settings.get("show_toc", False),
+                break_on_single_newline=settings.get("break_on_single_newline", False),
             )
             body = result["body_html"]
             toc = result["toc_html"] if settings.get("show_toc") else ""

@@ -40,6 +40,7 @@ class MarkdownPreviewEnhancedExportHtmlCommand(sublime_plugin.WindowCommand):
                     log=log.debug,
                     favicon=config.get("favicon", "") or "",
                     embed_images=bool(config.get("embed_images", True)),
+                    break_on_single_newline=rs["break_on_single_newline"],
                 )
                 msg = "Exported HTML: %s" % dest
                 if errors:

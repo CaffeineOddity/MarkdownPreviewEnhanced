@@ -43,6 +43,7 @@ class MarkdownPreviewEnhancedExportPdfCommand(sublime_plugin.WindowCommand):
                         title=view_title(view),
                         log=log.debug,
                         favicon=config.get("favicon", "") or "",
+                        break_on_single_newline=rs["break_on_single_newline"],
                     )
                     sublime.set_timeout(
                         lambda: (
