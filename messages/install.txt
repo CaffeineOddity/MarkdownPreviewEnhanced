@@ -7,12 +7,15 @@ Live Markdown preview in an external browser with full HTML+CSS rendering.
 
 Features
 --------
-- Toggle browser preview with `super+shift+m` (macOS) /
-  `ctrl+shift+m` (Windows/Linux).
+- Command Palette: MarkdownPreviewEnhanced: Toggle Preview.
+  This package ships no default key bindings.
 - Smart live refresh that preserves scroll position (local server).
 - Relative images resolved from the markdown file directory.
 - Mermaid diagrams and KaTeX math (vendored KaTeX; no CDN required).
 - GFM task lists, footnotes, frontmatter stripping.
+- A single newline stays in the same paragraph (CommonMark / GitHub
+  .md files). Two trailing spaces still force a line break. Set
+  `break_on_single_newline` to true for the old `<br>` behaviour.
 - TOC sidebar, HTML/PDF export, optional editor↔preview scroll sync.
 - Cross-platform browser detection (macOS / Windows / Linux).
 
@@ -25,13 +28,19 @@ Requirements
 Usage
 -----
 1. Open a `.md` file.
-2. Press `super+shift+m` (macOS) to open the preview.
+2. Command Palette: `MarkdownPreviewEnhanced: Toggle Preview`.
 3. Edit — the preview updates live without jumping scroll.
 4. Command Palette: `MarkdownPreviewEnhanced: Export HTML…` / `Export PDF…`
+
+There is no default shortcut (it would override Sublime's built-in keys).
+To add one: Command Palette →
+`Preferences: MarkdownPreviewEnhanced Key Bindings`.
+Example: `super+alt+m` / `ctrl+alt+m` → `markdown_preview_enhanced_toggle`.
 
 Settings
 --------
 Preferences → Package Settings → MarkdownPreviewEnhanced → Settings
 
 Key options: use_local_server, output_dir, browser, show_toc,
-enable_katex, scroll_sync, mermaid_theme, custom_css.
+enable_katex, scroll_sync, mermaid_theme, custom_css,
+break_on_single_newline.
