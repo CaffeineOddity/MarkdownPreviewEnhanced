@@ -1,0 +1,6 @@
+MarkdownPreviewEnhanced 0.3.4
+=============================
+
+- docs: stop telling new installs there is a default shortcut
+- fix(preview): keep a single newline inside the paragraph
+- chore: restore debug logging on master
