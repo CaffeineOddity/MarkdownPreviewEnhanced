@@ -1,0 +1,5 @@
+MarkdownPreviewEnhanced 0.3.5
+=============================
+
+- fix(preview): keep #fragment on cross-file heading links
+- chore: restore debug logging on master
