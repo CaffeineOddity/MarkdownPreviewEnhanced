@@ -676,6 +676,10 @@ def rewrite_link_hrefs(html, base_dir, mode="server"):
     document and the server queues it for the standard preview flow. Other
     relative links become /doc/ paths.
 
+    A trailing "#fragment" is split off before resolving the path - it is not
+    part of the filename - and carried onto the rewritten URL, which is what
+    makes "../other.md#heading" reach the target instead of a 404.
+
     Also make every non-anchor link open in a new tab.
     """
     import posixpath
@@ -693,6 +697,9 @@ def rewrite_link_hrefs(html, base_dir, mode="server"):
             return m.group(0)
         if s.startswith("?") or s.startswith("//"):
             return m.group(0)
+        # "#fragment" 不属于文件名，先摘出来再解析路径，最后原样拼回
+        s, _, fragment = s.partition("#")
+        frag = "#" + fragment if fragment else ""
         # 候选一:markdown 惯例,相对 md 文件目录解析(支持 ../..)
         cand_file = None
         if not s.startswith("/"):
@@ -717,10 +724,10 @@ def rewrite_link_hrefs(html, base_dir, mode="server"):
                     break
         if is_md_link or (target is not None and os.path.isdir(target)):
             path = target or cand_file or cand_root
-            return "%s/?file=%s%s" % (prefix, _quote(path, safe=""), suffix)
+            return "%s/?file=%s%s%s" % (prefix, _quote(path, safe=""), frag, suffix)
         if not rel:
             return m.group(0)
-        return "%s/doc/%s%s" % (prefix, rel, suffix)
+        return "%s/doc/%s%s%s" % (prefix, rel, frag, suffix)
 
     html = _A_HREF_RE.sub(repl, html)
 
