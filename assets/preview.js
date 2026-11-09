@@ -527,6 +527,7 @@
     decorateCodeCopyButtons();
     tocActiveId = null;
     updateTocActive();
+    scrollToInitialHash();
   }
 
   // ── SSE + BroadcastChannel ───────────────────────────────────────────
@@ -1133,9 +1134,58 @@
     }
   }
 
-  function switchToPreview(file) {
-    if (!file || file === channelFile) return;
+  // ── anchor scrolling (#fragment) ──────────────────────────────────────
+
+  function hrefFragment(href) {
+    var s = String(href || "");
+    var i = s.indexOf("#");
+    return i >= 0 ? s.slice(i + 1) : "";
+  }
+
+  // location.hash 是 percent-encoded（中文标题就是 %E5%AD%97%E8%89%B2），
+  // 元素的 id 是原文；解码失败（如裸 "%"）时退回原串。
+  function decodeHashId(raw) {
+    var s = String(raw || "");
+    if (s.charAt(0) === "#") s = s.slice(1);
+    if (!s) return "";
+    try { return decodeURIComponent(s); } catch (err) { return s; }
+  }
+
+  function scrollToAnchorId(id, smooth) {
+    if (!id) return false;
+    var el = document.getElementById(id);
+    if (!el) return false;
+    el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
+    return true;
+  }
+
+  var hashScrollDone = false;
+
+  // 从别的文档带 #fragment 打开时，正文可能先到占位再经 SSE 补全，
+  // 所以加载后与每次 applyContent 后都试一次；成功即停，避免后续
+  // 编辑推来的 content 事件反复抢用户的滚动位置。
+  function scrollToInitialHash() {
+    if (hashScrollDone) return true;
+    var id = decodeHashId(window.location.hash || "");
+    if (!id) {
+      hashScrollDone = true;
+      return true;
+    }
+    if (!scrollToAnchorId(id, false)) return false;
+    hashScrollDone = true;
+    return true;
+  }
+
+  function switchToPreview(file, hash) {
+    if (!file) return;
+    if (file === channelFile) {
+      // "../same.md#heading" 这类指向当前文档的链接：原地滚动，不重开页面
+      scrollToAnchorId(decodeHashId(hash), true);
+      return;
+    }
+    // fragment 必须拼在 withAuthQuery 之后，否则 token 会落进 hash 里
     var url = withAuthQuery("/?file=" + encodeURIComponent(file));
+    if (hash) url += "#" + hash;
     var name = windowNameFor(file);
     var alive = fileIsAlive(file);
     // User gesture: window.open(url, name) either reuses a named window or
@@ -1181,18 +1231,13 @@
       // 页内锚点：直接滚动到目标 id（含中文等 Unicode），避免被 fileFromHref
       // 用当前页面的 ?file= 填充而误判成文档链接，吞掉锚点跳转。
       if (href.charAt(0) === "#") {
-        var id = decodeURIComponent(href.slice(1));
-        var el = document.getElementById(id);
-        if (el) {
-          ev.preventDefault();
-          el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
+        if (scrollToAnchorId(decodeHashId(href), true)) ev.preventDefault();
         return;
       }
       var file = fileFromHref(href);
       if (!file) return;
       ev.preventDefault();
-      switchToPreview(file);
+      switchToPreview(file, hrefFragment(href));
     }, false);
   }
 
@@ -1206,12 +1251,7 @@
       if (!a) return;
       var href = a.getAttribute("href") || "";
       if (href.charAt(0) === "#") {
-        var id = decodeURIComponent(href.slice(1));
-        var el = document.getElementById(id);
-        if (el) {
-          ev.preventDefault();
-          el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
+        if (scrollToAnchorId(decodeHashId(href), true)) ev.preventDefault();
       }
     };
   }
@@ -1636,6 +1676,8 @@
     bindCopyCode();
     decorateCodeCopyButtons();
     updateTocActive();
+    // 内容已内联在 shell 里时这里就能定位；占位页则由 applyContent 再试。
+    scrollToInitialHash();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("wheel", onUserScroll, { passive: true });
     window.addEventListener("touchmove", onUserScroll, { passive: true });
