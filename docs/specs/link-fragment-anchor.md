@@ -67,4 +67,4 @@
 ## 验证
 
 - 自动：`tests/test_link_fragment_anchor.py`（12 条），`python3 tests/run_all.py`
-- 手动：[Issue 验证用例集](../issues_case_validate.md) 的 Issue #22 用例 C1~C9
+- 手动：[跨文件标题链接](../issuses_case.md#7-跨文件标题链接issue-22)（issue #22）
