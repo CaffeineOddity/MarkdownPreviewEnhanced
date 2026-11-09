@@ -1,0 +1,8 @@
+MarkdownPreviewEnhanced 0.3.6
+=============================
+
+- fix(preview): nest a list indented by two spaces
+- rename md file
+- Merge branch 'master' of github.com:CaffeineOddity/MarkdownPreviewEnhanced
+- ignore
+- chore: restore debug logging on master
