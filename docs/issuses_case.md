@@ -410,3 +410,11 @@ README 里的标题：
 百分号编码的锚点，应和上面的「验收标准」落在同一标题：
 
 [验收标准](./specs/link-fragment-anchor.md#%E9%AA%8C%E6%94%B6%E6%A0%87%E5%87%86)
+
+### 8 Markdown render test (issue #23）
+* List 1
+  - nested list 1a
+  - nested list 1b
+* List 2
+  - nested list 2a
+  - nested list 2b

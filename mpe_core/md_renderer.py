@@ -41,7 +41,6 @@ def _load_mdpopups():
         from mdpopups.markdown.extensions.fenced_code import FencedCodeExtension
         from mdpopups.markdown.extensions.footnotes import FootnoteExtension
         from mdpopups.markdown.extensions.nl2br import Nl2BrExtension
-        from mdpopups.markdown.extensions.sane_lists import SaneListExtension
         from mdpopups.markdown.extensions.tables import TableExtension
         from mdpopups.markdown.extensions.toc import TocExtension
         return {
@@ -51,7 +50,6 @@ def _load_mdpopups():
             "FencedCode": FencedCodeExtension,
             "Footnotes": FootnoteExtension,
             "Nl2Br": Nl2BrExtension,
-            "SaneLists": SaneListExtension,
             "Tables": TableExtension,
             "Toc": TocExtension,
         }
@@ -112,7 +110,6 @@ def _load_mdpopups():
             from mdpopups.markdown.extensions.fenced_code import FencedCodeExtension
             from mdpopups.markdown.extensions.footnotes import FootnoteExtension
             from mdpopups.markdown.extensions.nl2br import Nl2BrExtension
-            from mdpopups.markdown.extensions.sane_lists import SaneListExtension
             from mdpopups.markdown.extensions.tables import TableExtension
             from mdpopups.markdown.extensions.toc import TocExtension
             return {
@@ -122,7 +119,6 @@ def _load_mdpopups():
                 "FencedCode": FencedCodeExtension,
                 "Footnotes": FootnoteExtension,
                 "Nl2Br": Nl2BrExtension,
-                "SaneLists": SaneListExtension,
                 "Tables": TableExtension,
                 "Toc": TocExtension,
             }
@@ -146,7 +142,6 @@ try:
     FencedCodeExtension = _mods["FencedCode"]
     FootnoteExtension = _mods["Footnotes"]
     Nl2BrExtension = _mods["Nl2Br"]
-    SaneListExtension = _mods["SaneLists"]
     TableExtension = _mods["Tables"]
     TocExtension = _mods["Toc"]
     _HAS_MARKDOWN = True
@@ -161,6 +156,7 @@ except Exception as _e:
 from .emoji_map import EMOJI_ALIASES
 from .katex_renderer import render_tex_batch  # noqa: E402
 from .mdpp_inline import MdppInlineExtension  # noqa: E402
+from .nested_lists import TwoSpaceListExtension  # noqa: E402
 
 _ECHARTS_FENCE_RE = re.compile(
     r"(?m)^(`{3,}|~{3,})echarts[ \t]*\n(.*?)^\1[ \t]*$",
@@ -1045,7 +1041,7 @@ def render(
     if break_on_single_newline:
         extensions.append(Nl2BrExtension())
     extensions.extend([
-        SaneListExtension(),
+        TwoSpaceListExtension(),
         TocExtension(permalink=False, toc_depth=6, title="Contents", slugify=_unicode_slugify),
         _build_codehilite(),
         MdppInlineExtension(),
