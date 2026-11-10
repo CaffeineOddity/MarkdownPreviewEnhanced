@@ -1,5 +1,4 @@
 """Export the active markdown view to PDF."""
-import os
 import threading
 import traceback
 
@@ -17,11 +16,7 @@ class MarkdownPreviewEnhancedExportPdfCommand(sublime_plugin.WindowCommand):
         view = self.window.active_view()
         if view is None:
             return
-        default_name = "export.pdf"
-        if view.file_name():
-            base = os.path.splitext(os.path.basename(view.file_name()))[0]
-            default_name = base + ".pdf"
-        default_path = os.path.join(config.output_dir(), default_name)
+        default_path = config.export_default_path(view.file_name(), ".pdf")
 
         def on_done(path):
             if not path:

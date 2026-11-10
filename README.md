@@ -75,6 +75,7 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | --- | --- | --- |
 | `mermaid_theme` | `"default"` | Export / file-mode diagrams: `default` / `dark` / `forest` / `neutral`. Live preview follows the page theme. |
 | `output_dir` | `""` | Empty = Sublime cache |
+| `export_dir` | `""` | Export PDF/HTML suggested path: `""` = `output_dir`; `"beside_source"` = next to the `.md`; otherwise a directory (`~` ok) |
 | `use_local_server` | `true` | SSE, images, scroll sync |
 | `server_port` | `8765` | Tries the next ports if busy |
 | `server_idle_seconds` | `0` | Idle auto-stop; `0` = until Close / Sublime exit |

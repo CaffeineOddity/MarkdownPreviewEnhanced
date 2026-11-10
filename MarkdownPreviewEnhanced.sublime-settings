@@ -6,6 +6,12 @@
     // Example: "~/Downloads/MarkdownPreviewEnhanced"
     "output_dir": "",
 
+    // Suggested directory for Export PDF / Export HTML input panel.
+    // Does not affect live preview files under output_dir.
+    // "": same as output_dir; "beside_source": next to the .md file;
+    // otherwise a directory path (~ expanded).
+    "export_dir": "",
+
     // Use local HTTP server for smart refresh, relative images, scroll sync.
     // If false, falls back to file:// + meta refresh with scroll restore.
     "use_local_server": true,
