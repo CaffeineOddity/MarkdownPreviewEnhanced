@@ -75,6 +75,7 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | --- | --- | --- |
 | `mermaid_theme` | `"default"` | 导出 / 文件模式：`default` / `dark` / `forest` / `neutral`。实时预览跟随页面明暗。 |
 | `output_dir` | `""` | 空 = Sublime 缓存目录 |
+| `export_dir` | `""` | 导出 PDF/HTML 默认路径：`""` = `output_dir`；`"beside_source"` = 与 `.md` 同目录；否则为目录路径（可用 `~`） |
 | `use_local_server` | `true` | SSE、相对图片、滚动同步 |
 | `server_port` | `8765` | 占用时会尝试后续端口 |
 | `server_idle_seconds` | `0` | 空闲自动停服；`0` = 直到 Close / 退出 Sublime |

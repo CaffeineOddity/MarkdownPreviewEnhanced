@@ -32,6 +32,32 @@ def output_dir():
     return path
 
 
+def export_default_path(file_name, ext):
+    """Suggested path for Export PDF/HTML input panel.
+
+    ``export_dir`` (export-only; does not affect preview ``output_dir``):
+    - ``""``: ``output_dir() / <basename><ext>``
+    - ``"beside_source"``: same directory as the saved markdown file
+    - any other non-empty string: ``expanduser(path) / <basename><ext>``
+
+    Untitled / unsaved views (no ``file_name``) use ``export.<ext>`` and fall
+    back to ``output_dir`` when ``export_dir`` is empty or ``beside_source``.
+    """
+    if file_name:
+        base = os.path.splitext(os.path.basename(file_name))[0]
+        name = base + ext
+    else:
+        name = "export" + ext
+    raw = str(get("export_dir", "") or "").strip()
+    if raw == "beside_source":
+        if file_name:
+            return os.path.join(os.path.dirname(file_name), name)
+        return os.path.join(output_dir(), name)
+    if raw:
+        return os.path.join(os.path.expanduser(raw), name)
+    return os.path.join(output_dir(), name)
+
+
 def preview_path():
     return os.path.join(output_dir(), "preview.html")
 

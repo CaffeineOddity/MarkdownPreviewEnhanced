@@ -1,5 +1,4 @@
 """Export the active markdown view to a standalone HTML file."""
-import os
 import traceback
 
 import sublime
@@ -16,11 +15,7 @@ class MarkdownPreviewEnhancedExportHtmlCommand(sublime_plugin.WindowCommand):
         view = self.window.active_view()
         if view is None:
             return
-        default_name = "export.html"
-        if view.file_name():
-            base = os.path.splitext(os.path.basename(view.file_name()))[0]
-            default_name = base + ".html"
-        default_path = os.path.join(config.output_dir(), default_name)
+        default_path = config.export_default_path(view.file_name(), ".html")
 
         def on_done(path):
             if not path:
