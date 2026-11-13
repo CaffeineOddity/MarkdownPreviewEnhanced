@@ -1,0 +1,6 @@
+MarkdownPreviewEnhanced 0.3.7
+=============================
+
+- Merge pull request #24 from luismascotto/feat/export-dir-beside-source
+- feat: export_dir setting for beside-source PDF/HTML defaults
+- chore: restore debug logging on master
