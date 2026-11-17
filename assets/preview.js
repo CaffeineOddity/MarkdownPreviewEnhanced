@@ -199,6 +199,13 @@
       + _mermaidZoomX + "px," + _mermaidZoomY + "px)";
   }
 
+  function zoomHintText() {
+    // 未设置 zoom_hint 时用英文。自定义文案走 textContent，不当 HTML。
+    var hint = cfg.zoomHint;
+    if (typeof hint === "string" && hint.trim()) return hint;
+    return "Drag to pan · Scroll to zoom · Esc to close";
+  }
+
   function mermaidZoomRoot() {
     var el = $("mdpp-mermaid-zoom");
     if (el) return el;
@@ -211,8 +218,9 @@
       + '<div class="mdpp-mermaid-zoom-stage" role="dialog" aria-modal="true"'
       + ' aria-label="Mermaid diagram">'
       + '<button type="button" class="mdpp-mermaid-zoom-close" aria-label="Close">×</button>'
-      + '<div class="mdpp-mermaid-zoom-hint">拖动平移 · 滚轮缩放 · Esc 关闭</div>'
+      + '<div class="mdpp-mermaid-zoom-hint"></div>'
       + '<div class="mdpp-mermaid-zoom-canvas"><div class="mdpp-mermaid-zoom-mover"></div></div></div>';
+    el.querySelector(".mdpp-mermaid-zoom-hint").textContent = zoomHintText();
     document.body.appendChild(el);
     var canvas = el.querySelector(".mdpp-mermaid-zoom-canvas");
     var drag = { on: false, moved: false, x: 0, y: 0 };

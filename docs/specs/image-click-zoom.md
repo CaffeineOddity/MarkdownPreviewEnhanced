@@ -17,6 +17,9 @@
 - 初始尺寸：图片按容器 70% 视口宽等比缩放，`image-rendering: auto`；
   放大超过 100% 后光标 grab。
 - 关闭：× 按钮、点 backdrop、Esc（`mdppInit` 已有 Escape 监听，追加 close 调用）。
+- 提示文案默认英文 `Drag to pan · Scroll to zoom · Esc to close`（图片与 Mermaid
+  共用同一条）。`zoom_hint` 为非空字符串时整句替换；空白视为未设置。文案按纯文本
+  写入，不解析 HTML。占位 shell 与正式 shell 都读这项设置。
 - 打印/PNG 导出：overlay 在 `@media print` 下隐藏（沿用既有规则）。
 - 暗色模式：backdrop 半透明黑，无需分支。
 - 演示模式（`/presentation`）不注入此交互，slides 页无变更。
@@ -24,9 +27,12 @@
 ## 涉及文件
 
 - `assets/preview.js`：泛化 `openMermaidZoom` → `openZoomOverlay`；新增
-  `bindImageZoom()`（事件委托，挂 `mdppInit` 一次即可，SSE 替换 DOM 不失效）
+  `bindImageZoom()`（事件委托，挂 `mdppInit` 一次即可，SSE 替换 DOM 不失效）。
+  提示读 `MDPP_CONFIG.zoomHint`，缺省英文。
 - `assets/preview.css`：img 的 `cursor: zoom-in`；zoom canvas 内 img 样式
-- `tests/`：无 JS 测试基建，行为靠人工冒烟（README 冒烟清单）
+- `mpe_core/html_builder.py`：`zoom_hint` 写入 `window.MDPP_CONFIG`，`<` 转义
+- `MarkdownPreviewEnhanced.sublime-settings`：`zoom_hint`
+- `tests/test_zoom_hint.py`：默认英文、自定义文案、`</script>` 不打断页面
 
 ## 验收标准
 
@@ -34,6 +40,8 @@
 - 图片包在链接里时点击走链接不放大。
 - mermaid 图放大行为与之前完全一致（回归）。
 - `applyContent` SSE 刷新后新图片仍可点击放大。
+- 未设置 `zoom_hint` 时，放大层提示为 `Drag to pan · Scroll to zoom · Esc to close`。
+- `zoom_hint` 设为其它语言时，放大层显示该句，不显示默认英文。
 
 ## 已知边界与不做项
 

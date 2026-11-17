@@ -1,0 +1,6 @@
+MarkdownPreviewEnhanced 0.3.8
+=============================
+
+- Article width is `content_width` (default 0.8, range 0.5–1): the fraction of the space left after the sidebar. The sidebar stays on the left of the article with a 28px gap.
+- Image and Mermaid zoom hint is English by default. Set `zoom_hint` to use another language (#25).
+- Task-list items no longer break inline code into separate wrapped columns.

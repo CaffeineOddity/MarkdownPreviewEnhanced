@@ -105,6 +105,36 @@ body {
   align-items: start;
 }
 
+/* 实时预览：侧栏在正文左侧，中间留 28px。
+   正文宽 = (屏宽 - 侧栏占位 - 间距) × content_width，范围 0.5–1，缺省 0.8。
+   侧栏隐藏或窄屏改到上方时间距和占位都为 0。整组居中。导出页不走这套。 */
+body.mdpp-layout:not(.mdpp-export) {
+  --mdpp-sidebar-width: 240px;
+  --mdpp-sidebar-gap: 28px;
+}
+
+body.mdpp-layout:not(.mdpp-export).mdpp-has-toc .mdpp-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  column-gap: var(--mdpp-sidebar-gap);
+  max-width: none;
+  width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+body.mdpp-layout:not(.mdpp-export) .mdpp-sidebar {
+  flex: 0 0 var(--mdpp-sidebar-width);
+  width: var(--mdpp-sidebar-width);
+}
+
+body.mdpp-layout:not(.mdpp-export) .mdpp-main {
+  flex: 0 0 auto;
+  width: calc((100% - var(--mdpp-sidebar-width) - var(--mdpp-sidebar-gap)) * var(--mdpp-content-width, 0.8));
+  margin: 0;
+}
+
 .mdpp-sidebar {
   position: sticky;
   top: 20px;
@@ -358,16 +388,21 @@ body {
   padding-left: 0.4em;
 }
 
+/* 不用 flex。flex 会把复选框、每段行内代码和中间的文字拆成独立伸缩项，
+   长代码在自己的格子里折行，而不是整句顺延。 */
 .markdown-body .task-list-item {
   list-style: none;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.45em;
 }
 
 .markdown-body .task-list-item-checkbox {
-  margin: 0.35em 0 0;
+  margin: 0.35em 0.45em 0 0;
+  vertical-align: text-top;
   accent-color: var(--mdpp-accent);
+}
+
+.markdown-body .task-list-item code {
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 /* checkbox 可点击回写编辑器（server 模式）；file/export 模式 JS 不上报 */
@@ -921,19 +956,29 @@ body.mdpp-sidebar-hidden .mdpp-sidebar-toggle .mdpp-icon-eye-off {
   display: block;
 }
 
-/* 隐藏侧栏：整块消失，两列收回单列，正文居中铺满 */
+/* 隐藏侧栏：占位归零，正文按 content_width 居中 */
 body.mdpp-sidebar-hidden .mdpp-sidebar {
   display: none;
 }
+body.mdpp-layout:not(.mdpp-export).mdpp-sidebar-hidden {
+  --mdpp-sidebar-width: 0px;
+  --mdpp-sidebar-gap: 0px;
+}
+body.mdpp-layout:not(.mdpp-export).mdpp-sidebar-hidden .mdpp-main {
+  margin-left: auto;
+  margin-right: auto;
+}
 body.mdpp-sidebar-hidden.mdpp-has-toc .mdpp-wrap {
   display: block;
-  max-width: 920px;
-  padding: 28px 24px 64px;
+  max-width: none;
+  width: 100%;
+  padding-left: 0;
+  padding-right: 0;
 }
 body.mdpp-sidebar-hidden.mdpp-has-toc .markdown-body {
-  margin: 0 auto;
-  max-width: 820px;
-  padding: 32px 36px 72px;
+  max-width: none;
+  width: 100%;
+  margin: 0;
 }
 
 /* ── print ────────────────────────────────────────────────────────────── */
@@ -1182,6 +1227,26 @@ body.mdpp-sidebar-hidden.mdpp-has-toc .markdown-body {
   .mdpp-has-toc .mdpp-wrap {
     grid-template-columns: 1fr;
     padding: 16px;
+  }
+  /* 侧栏改到正文上方，不再占水平宽度 */
+  body.mdpp-layout:not(.mdpp-export) {
+    --mdpp-sidebar-width: 0px;
+    --mdpp-sidebar-gap: 0px;
+  }
+  body.mdpp-layout:not(.mdpp-export).mdpp-has-toc .mdpp-wrap {
+    flex-direction: column;
+    align-items: stretch;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  body.mdpp-layout:not(.mdpp-export) .mdpp-sidebar {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+  body.mdpp-layout:not(.mdpp-export) .mdpp-main {
+    width: calc(var(--mdpp-content-width, 0.8) * 100%);
+    margin-left: auto;
+    margin-right: auto;
   }
   .mdpp-sidebar {
     position: static;

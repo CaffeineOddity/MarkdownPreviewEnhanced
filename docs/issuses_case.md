@@ -19,7 +19,7 @@
 - 分屏渲染：`⌘-⌥-9`（`Ctrl-alt-9`）；
 
 
-
+<!-- pagebreak -->
 ### 句型
 
 中文标题的 id 应与文本一致，内部链接才能滚动到位。
@@ -31,6 +31,7 @@
 如果您用作 `PPT` 预览（入口在`设置`中），需要注意，这里暂还不能支持各种图表的渲染；您可以使用 `---` 来定义水平方向上幻灯片，用 `--` 来定义垂直幻灯片；更多设定可以参见 [RevealJs 文档](https://github.com/hakimel/reveal.js#table-of-contents)。
 
 ---
+<!-- pagebreak -->
 
 ## 什么是 Markdown
 
@@ -63,6 +64,7 @@ def _startupinfo():
 - [x] 🌟 增加对**所见即所得**编辑模式的支持(`⌘-⇧-M`)；
 
 ---
+<!-- pagebreak -->
 
 ### 2. 书写一个质能守恒公式[^LaTeX]
 
@@ -82,6 +84,7 @@ $$
 ```
 
 ---
+<!-- pagebreak -->
 
 ### 4. 高效绘制[流程图](https://github.com/knsv/mermaid#flowchart)
 
@@ -120,6 +123,7 @@ graph TD
 ```
 
 ---
+<!-- pagebreak -->
 
 ### 5. 高效绘制[序列图](https://github.com/knsv/mermaid#sequence-diagram)
 
@@ -138,6 +142,8 @@ sequenceDiagram
 ```
 
 ---
+
+<!-- pagebreak -->
 
 ### 6. 高效绘制[甘特图](https://github.com/knsv/mermaid#gantt-diagram)
 
@@ -160,6 +166,7 @@ gantt
     验收: 3d
 ```
 
+<!-- pagebreak -->
 ### 7. 支持图表
 
 ```echarts
@@ -240,6 +247,9 @@ gantt
 > **备注**：上述 echarts 图表📈，其数据，须使用严格的 **JSON** 格式；您可使用 JSON.stringify(data)，将对象传换从而得标准数据，即可正常使用。
 
 ---
+
+<!-- pagebreak -->
+
 ### 8. 绘制表格
 
 | 作品名称        | 在线地址   |  上线日期  |
@@ -252,6 +262,8 @@ gantt
 
 ---
 
+<!-- pagebreak -->
+
 ### 9. 更详细语法说明
 
 想要查看更详细的语法说明，可以参考这份 [Markdown 资源列表](https://github.com/nicejade/nice-front-end-tutorial/blob/master/tutorial/markdown-tutorial.md)，涵盖入门至进阶教程，以及资源、平台等信息，能让您对她有更深的认知。
@@ -261,6 +273,8 @@ gantt
 最新更新于 2025.04.16
 
 ---
+
+<!-- pagebreak -->
 
 ## 回归测试（v0.3.x 修复项）
 
@@ -309,7 +323,7 @@ set -euo pipefail
 echo "building..."
 make
 ```
-
+<!-- pagebreak -->
 ### 3. 中文标题 anchor（issue #16）
 
 中文标题应保留 Unicode 作为锚点 id，而不是退化成 `_1`/`_2`；点下面的链接能跳到对应标题。
@@ -327,6 +341,8 @@ make
 
 ---
 
+<!-- pagebreak -->
+
 ### 4. Mermaid 标题 id 冲突（issue #18）
 
 标题恰好生成 id 为 `mermaid` 时会占用浏览器全局名 `window.mermaid`，遮住真正的 mermaid 库。下面的图必须正常渲染成 SVG（不能停留在源码文本），且控制台不要出现 `mermaid.initialize is not a function`。
@@ -340,6 +356,7 @@ graph TD
 
 ---
 
+<!-- pagebreak -->
 ### 5. 子图外连边（issue #19）
 
 子图里的节点连到外面时，子图自己的 `direction` 应被忽略。下面 `a`、`b` 应上下排列，连到 `c` 的边从节点 `b` 出发，而不是从子图 `S` 的边框出发。
@@ -353,7 +370,7 @@ graph TD
     b --> c
 ```
 
----
+<!-- pagebreak -->
 
 ### 6. 单换行是软换行（issue #21）
 
@@ -374,6 +391,8 @@ one paragraph
 another paragraph
 
 ---
+
+<!-- pagebreak -->
 
 ### 7. 跨文件标题链接（issue #22）
 
@@ -410,6 +429,8 @@ README 里的标题：
 百分号编码的锚点，应和上面的「验收标准」落在同一标题：
 
 [验收标准](./specs/link-fragment-anchor.md#%E9%AA%8C%E6%94%B6%E6%A0%87%E5%87%86)
+
+<!-- pagebreak -->
 
 ### 8 Markdown render test (issue #23）
 * List 1

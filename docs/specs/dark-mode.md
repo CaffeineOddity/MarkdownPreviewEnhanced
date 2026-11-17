@@ -10,7 +10,7 @@
 ## 目标
 
 - 预览页支持暗黑模式；样式切换由 CSS 变量驱动，不改渲染管线
-- 左侧工具栏（`mdpp-toolbar-sidebar`）增加切换按钮：☀️/🌙，点击在
+- 侧栏工具栏（`mdpp-toolbar-sidebar`）增加切换按钮：☀️/🌙，点击在
   light/dark 间切换，记住选择（localStorage），下次打开沿用
 - 默认跟随系统 `prefers-color-scheme`（无用户显式选择时）
 

@@ -40,9 +40,9 @@ Open a `.md` file and run **MarkdownPreviewEnhanced: Toggle Preview** to open / 
 - **Paste as Markdown** (right-click or Command Palette) converts clipboard HTML to markdown (headings, bold/italic, links, lists, code blocks, GFM tables); no HTML → plain paste. Linux needs `xclip` / `wl-clipboard`. Set `paste_download_images` to `true` to save remote images into `media/`.
 - Editing updates the preview in place (SSE), scroll kept. Re-running the command focuses the existing tab. Switching tabs in the browser focuses the matching Sublime view, and vice versa. The local server stays up while any preview tab is open and stops shortly after the last one closes.
 - Sidebar toolbar: 📋 copy as rich text, 🖼️ PNG, 💾 standalone HTML, 📽️ presentation, 🌙/☀️ dark mode, ☕ tip.
-- The 👁️ button at the bottom-right hides/shows the whole sidebar (toolbar, tabs, TOC) so you can focus on the preview; the choice is remembered.
+- The 👁️ button at the bottom-right hides/shows the whole sidebar (toolbar, tabs, TOC) so you can focus on the preview; the choice is remembered. The sidebar sits on the left of the article with a 28px gap. `content_width` (default `0.8`, range `0.5`–`1`) is how much of the remaining width the article uses.
 - Hover a code block for a **Copy** button. **Copy as Rich Text** copies the rendered HTML to the clipboard (browser button or Command Palette) for mail / Word / Confluence.
-- Dark mode follows `prefers-color-scheme`; the choice is stored in the browser. Click a Mermaid diagram or image to zoom. Clicking a line in Sublime scrolls the matching block to the middle of the preview.
+- Dark mode follows `prefers-color-scheme`; the choice is stored in the browser. Click a Mermaid diagram or image to zoom. The hint is English by default (`Drag to pan · Scroll to zoom · Esc to close`); set `zoom_hint` to replace that sentence. Clicking a line in Sublime scrolls the matching block to the middle of the preview.
 - GFM task-list checkboxes are clickable and write back to the file. Callouts (`> [!NOTE]` / `TIP` / `IMPORTANT` / `WARNING` / `CAUTION`), `~~del~~`, `==mark==`, `^sup^`, `~sub~` render in preview and exports.
 
 ### Presentation mode
@@ -94,6 +94,8 @@ Preferences → Package Settings → **MarkdownPreviewEnhanced** → Settings
 | `custom_css` | `""` | Extra CSS file path (`~` ok) |
 | `embed_images` | `true` | Export HTML/PDF: embed local images as base64 so output is fully portable |
 | `favicon` | `""` | Empty = bundled icon; `"none"` = no icon; otherwise a local path or `http(s)` URL |
+| `zoom_hint` | `""` | Image / Mermaid zoom hint. Empty = `Drag to pan · Scroll to zoom · Esc to close` |
+| `content_width` | `0.8` | Main column width as a fraction of the space left after the sidebar. Range `0.5`–`1` |
 
 Per-view override:
 

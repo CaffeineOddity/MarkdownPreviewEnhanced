@@ -310,7 +310,7 @@ def _cache_first_scripts():
 
 
 def _preview_sidebar(toc_html, show_toc, toolbar_html=""):
-    """左侧栏:工具栏在上,预览 tab 列表居中,TOC 在下。"""
+    """侧栏在正文左侧,中间留 28px:工具栏在上,预览 tab 列表居中,TOC 在下。"""
     tabs = (
         '<nav id="mdpp-tabs" class="mdpp-tabs" aria-label="Preview tabs">'
         '<div class="mdpp-tabs-title">Preview tabs</div>'
@@ -327,6 +327,41 @@ def _preview_sidebar(toc_html, show_toc, toolbar_html=""):
     return '<aside class="mdpp-sidebar">%s%s%s</aside>' % (toolbar_html, tabs, toc)
 
 
+def normalize_zoom_hint(value):
+    """把设置里的缩放提示收成单行文本。空白或非字符串视为未设置。"""
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.split())
+
+
+_DEFAULT_CONTENT_WIDTH = 0.8
+_MIN_CONTENT_WIDTH = 0.5
+_MAX_CONTENT_WIDTH = 1.0
+
+
+def normalize_content_width(value):
+    """把 content_width 收成 0.5–1。缺省、非数字或 NaN 时用 0.8。"""
+    if isinstance(value, bool):
+        return _DEFAULT_CONTENT_WIDTH
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return _DEFAULT_CONTENT_WIDTH
+    if number != number:
+        return _DEFAULT_CONTENT_WIDTH
+    if number < _MIN_CONTENT_WIDTH:
+        return _MIN_CONTENT_WIDTH
+    if number > _MAX_CONTENT_WIDTH:
+        return _MAX_CONTENT_WIDTH
+    return number
+
+
+def format_content_width(value):
+    """给 CSS 变量用的十进制文本，去掉多余的 0。"""
+    text = "%.4f" % normalize_content_width(value)
+    return text.rstrip("0").rstrip(".")
+
+
 def build_preview_shell(
     body_html,
     toc_html="",
@@ -338,6 +373,8 @@ def build_preview_shell(
     title="Markdown Preview",
     favicon="",
     frontmatter=None,
+    zoom_hint="",
+    content_width=_DEFAULT_CONTENT_WIDTH,
 ):
     """Build the stable shell page (polls /api/content when use_server)."""
     css = _load_asset("preview.css")
@@ -386,14 +423,16 @@ def build_preview_shell(
     )
 
     mode = "server" if use_server else "file"
-    config_js = (
-        "window.MDPP_CONFIG=%s;" % _json({
-            "mode": mode,
-            "scrollSync": bool(scroll_sync),
-            "showToc": bool(show_toc),
-            "katex": bool(enable_katex),
-        })
-    )
+    page_config = {
+        "mode": mode,
+        "scrollSync": bool(scroll_sync),
+        "showToc": bool(show_toc),
+        "katex": bool(enable_katex),
+    }
+    hint = normalize_zoom_hint(zoom_hint)
+    if hint:
+        page_config["zoomHint"] = hint
+    config_js = "window.MDPP_CONFIG=%s;" % _json(page_config)
 
     mermaid_tag = ""
     if _asset_exists("mermaid.min.js") and not use_server:
@@ -428,7 +467,8 @@ def build_preview_shell(
         "<script>%s</script>\n"
         "%s"
         "</head>\n"
-        "<body class=\"%s\" data-mdpp-mode=\"%s\">\n"
+        "<body class=\"%s\" data-mdpp-mode=\"%s\""
+        " style=\"--mdpp-content-width: %s\">\n"
         "<div id=\"mdpp-sponsor-modal\" class=\"mdpp-modal\" hidden"
         " onclick=\"if(event.target===this)mdppCloseSponsor()\">\n"
         "<div class=\"mdpp-modal-card\">\n"
@@ -466,6 +506,7 @@ def build_preview_shell(
         cache_loader,
         layout_class,
         mode,
+        format_content_width(content_width),
         toc_block,
         banner_html,
         body_html,
@@ -675,7 +716,8 @@ def build_clipboard_html(body_html, title="Markdown Preview"):
 
 def _json(obj):
     import json
-    return json.dumps(obj, ensure_ascii=False)
+    # `<` 必须转义，否则用户文案里的 `</script>` 会提前结束外层 script。
+    return json.dumps(obj, ensure_ascii=False).replace("<", "\\u003c")
 
 
 def _frontmatter_banner(frontmatter):

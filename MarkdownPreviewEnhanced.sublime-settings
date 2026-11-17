@@ -72,6 +72,16 @@
     // otherwise a local path (~ expanded) or http(s) URL.
     "favicon": "",
 
+    // Hint on the image / Mermaid zoom overlay.
+    // Empty uses "Drag to pan · Scroll to zoom · Esc to close".
+    // Example: "拖动平移 · 滚轮缩放 · Esc 关闭"
+    "zoom_hint": "",
+
+    // Live preview main column, as a fraction of the width left after the
+    // sidebar. Range 0.5–1; values outside it are clamped. 1 uses the full
+    // remainder. Sidebar hidden or stacked counts as zero width.
+    "content_width": 0.8,
+
     // Export HTML/PDF: embed local images as base64 data URIs so the output
     // is fully self-contained (portable to other machines). false keeps
     // file:// paths. Remote http(s) images are never downloaded.

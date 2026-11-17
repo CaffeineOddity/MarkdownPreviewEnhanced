@@ -30,6 +30,25 @@ _DOC_EXTENSIONS = frozenset({
 _LOCAL_HOSTS = frozenset(("127.0.0.1", "localhost"))
 
 
+def _configured_zoom_hint():
+    """读取 zoom_hint。设置不可用时返回空串，页面回落英文提示。"""
+    try:
+        from . import config
+        value = config.get("zoom_hint", "") or ""
+    except Exception:
+        return ""
+    return value if isinstance(value, str) else ""
+
+
+def _configured_content_width():
+    """读取 content_width。设置不可用时返回默认 0.8，由壳层再夹到 0.5–1。"""
+    try:
+        from . import config
+        return config.get("content_width", 0.8)
+    except Exception:
+        return 0.8
+
+
 def host_allowed(host_header):
     """True when Host is this loopback server, not a DNS-rebound name."""
     if not host_header:
@@ -496,6 +515,8 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 '<p style="color:#666;text-align:center;padding:40px">Rendering...</p>',
                 use_server=True,
                 title=os.path.basename(file_key or "preview"),
+                zoom_hint=_configured_zoom_hint(),
+                content_width=_configured_content_width(),
             )
         data = self._inject_client_token(html).encode("utf-8")
         self.send_response(200)

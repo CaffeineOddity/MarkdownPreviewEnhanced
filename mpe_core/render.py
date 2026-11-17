@@ -112,6 +112,8 @@ def publish(result, view, force_open=False):
         title=title,
         favicon=favicon,
         frontmatter=frontmatter,
+        zoom_hint=config.get("zoom_hint", "") or "",
+        content_width=config.get("content_width", 0.8),
     )
 
     base_dir = view_base_dir(view)
