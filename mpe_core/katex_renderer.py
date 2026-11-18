@@ -190,12 +190,16 @@ def render_tex_batch(jobs):
             ensure_ascii=False,
         )
         env = os.environ.copy()
-        # Ensure node can be found by shebang-less call
+        # Ensure node can be found by shebang-less call.
+        # Windows 区域编码（常见 cp1252）会把 Node 写出的 UTF-8 公式 HTML
+        # 解成乱码；TeX 里的非 ASCII 字符还会在写入 stdin 时抛 UnicodeEncodeError。
         r = subprocess.run(
             [node, helper],
             input=payload,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             universal_newlines=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
             env=env,
         )

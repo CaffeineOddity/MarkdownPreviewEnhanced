@@ -1,0 +1,4 @@
+MarkdownPreviewEnhanced 0.3.9
+=============================
+
+- Server-side KaTeX keeps Greek letters and symbols (α, ∑, λ) intact on Windows. The Node pipe uses UTF-8 instead of the system code page (#26).
