@@ -453,3 +453,28 @@ $$
 行内公式 $\alpha+\theta+\lambda$ 同样正常。公式里的非 ASCII 文本：$\text{αθλ}$。
 
 公式外：希腊字母 α、θ、求和 ∑、连乘 Π、λ 应原样显示。
+
+<!-- pagebreak -->
+
+### 10. 4 空格 / tab 嵌套列表与段落中断（issue #27）
+
+列表前没有空行时，列表也应中断段落；子列表按 4 个空格或 tab 缩进都要嵌套。
+
+un-order points
+- point 1
+- point 2
+    - point 2.1
+    - point 2.2
+- point 3
+
+order points
+1. point 1
+2. point 2
+    1. point 2.1
+    2. point 2.2
+
+tab 缩进的第二层：
+
+- tab point 1
+	- tab point 1.1
+		- tab point 1.1.1
