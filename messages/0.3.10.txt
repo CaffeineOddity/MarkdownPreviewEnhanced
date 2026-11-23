@@ -1,0 +1,9 @@
+MarkdownPreviewEnhanced 0.3.10
+==============================
+
+- Nested lists use the parent item's content column: 2-, 3-, and 4-space
+  and tab indents nest correctly at any depth (#27).
+- A bullet list, or an ordered list starting at 1, can interrupt a paragraph
+  without a preceding blank line, matching CommonMark / GitHub (#27).
+- Top-level four-space code blocks, list-item code blocks, ordered-list start
+  numbers, and separate `ul` / `ol` lists are unchanged.
