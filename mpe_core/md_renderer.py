@@ -156,7 +156,7 @@ except Exception as _e:
 from .emoji_map import EMOJI_ALIASES
 from .katex_renderer import render_tex_batch  # noqa: E402
 from .mdpp_inline import MdppInlineExtension  # noqa: E402
-from .nested_lists import TwoSpaceListExtension  # noqa: E402
+from .nested_lists import ListNestingExtension  # noqa: E402
 
 _ECHARTS_FENCE_RE = re.compile(
     r"(?m)^(`{3,}|~{3,})echarts[ \t]*\n(.*?)^\1[ \t]*$",
@@ -1041,7 +1041,7 @@ def render(
     if break_on_single_newline:
         extensions.append(Nl2BrExtension())
     extensions.extend([
-        TwoSpaceListExtension(),
+        ListNestingExtension(),
         TocExtension(permalink=False, toc_depth=6, title="Contents", slugify=_unicode_slugify),
         _build_codehilite(),
         MdppInlineExtension(),
