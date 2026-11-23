@@ -439,3 +439,17 @@ README 里的标题：
 * List 2
   - nested list 2a
   - nested list 2b
+
+<!-- pagebreak -->
+
+### 9. Windows 下 KaTeX 服务端渲染（issue #26）
+
+服务端 KaTeX 应把希腊字母和求和号渲染成字符本身。不要出现 `Î±`、`âˆ‘`、`Î»`，零宽空格也不要变成 `â€‹`。公式外的中文保持原样。
+
+$$
+L(\alpha, \theta) = \sum_{i=1}^{n} \Pi_i + \lambda
+$$
+
+行内公式 $\alpha+\theta+\lambda$ 同样正常。公式里的非 ASCII 文本：$\text{αθλ}$。
+
+公式外：希腊字母 α、θ、求和 ∑、连乘 Π、λ 应原样显示。
